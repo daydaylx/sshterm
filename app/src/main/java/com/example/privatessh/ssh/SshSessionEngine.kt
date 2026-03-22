@@ -2,6 +2,7 @@ package com.example.privatessh.ssh
 
 import com.example.privatessh.domain.model.AuthType
 import com.example.privatessh.domain.model.HostProfile
+import com.example.privatessh.domain.model.SessionPolicy
 import com.example.privatessh.ssh.auth.PasswordAuthStrategy
 import com.example.privatessh.ssh.auth.PrivateKeyAuthStrategy
 import com.example.privatessh.ssh.hostkey.HostKeyDecision
@@ -10,15 +11,17 @@ import com.example.privatessh.ssh.io.ErrorPump
 import com.example.privatessh.ssh.io.InputWriter
 import com.example.privatessh.ssh.io.OutputPump
 import com.example.privatessh.ssh.io.ShellChannelAdapter
+import com.example.privatessh.terminal.TerminalEmulator
+import com.example.privatessh.terminal.TerminalRendererState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,19 +58,28 @@ class SshSessionEngine @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    private val _terminalOutput = MutableStateFlow("")
-    val terminalOutput: StateFlow<String> = _terminalOutput.asStateFlow()
+    private val _terminalRendererState = MutableStateFlow(TerminalRendererState.default())
+    val terminalRendererState: StateFlow<TerminalRendererState> = _terminalRendererState.asStateFlow()
 
     private val _currentHost = MutableStateFlow<HostProfile?>(null)
     val currentHost: StateFlow<HostProfile?> = _currentHost.asStateFlow()
+
+    private val _shellStatus = MutableStateFlow(SessionShellStatus())
+    val shellStatus: StateFlow<SessionShellStatus> = _shellStatus.asStateFlow()
+
+    private val terminalLock = Any()
+    private val terminalEmulator = TerminalEmulator()
 
     private var currentClient: SSHClient? = null
     private var currentShellHandle: ShellChannelAdapter.ShellHandle? = null
     private var outputJob: Job? = null
     private var errorJob: Job? = null
     private var sessionScope: CoroutineScope? = null
+    private var tmuxConfirmationJob: Job? = null
     private var lastColumns: Int = 80
     private var lastRows: Int = 24
+    private var lastSessionPolicy: SessionPolicy = SessionPolicy()
+    private var tmuxMarkerCarry = ByteArray(0)
 
     @Volatile
     private var disconnectRequested = false
@@ -81,7 +93,8 @@ class SshSessionEngine @Inject constructor(
         allowOnlyKnownHosts: Boolean = false,
         columns: Int = lastColumns,
         rows: Int = lastRows,
-        isReconnect: Boolean = false
+        isReconnect: Boolean = false,
+        sessionPolicy: SessionPolicy = lastSessionPolicy
     ): Boolean = withContext(Dispatchers.IO) {
         disconnect()
 
@@ -92,6 +105,9 @@ class SshSessionEngine @Inject constructor(
         _currentHost.value = hostProfile
         lastColumns = columns.coerceAtLeast(10)
         lastRows = rows.coerceAtLeast(5)
+        lastSessionPolicy = sessionPolicy
+        resetTerminalState()
+        resetShellStatus()
 
         try {
             val client = sshClientFactory.createClient(hostProfile)
@@ -132,7 +148,7 @@ class SshSessionEngine @Inject constructor(
                 scope = sessionScope!!,
                 inputStream = shellHandle.shell.inputStream,
                 onOutput = { data ->
-                    appendOutput(String(data, Charsets.UTF_8))
+                    appendOutput(data)
                 },
                 onClosed = { reason ->
                     handleUnexpectedClosure(reason)
@@ -142,9 +158,10 @@ class SshSessionEngine @Inject constructor(
                 scope = sessionScope!!,
                 errorStream = shellHandle.shell.errorStream
             ) { data ->
-                appendOutput(String(data, Charsets.UTF_8))
+                appendOutput(data)
             }
             inputWriter.setOutputStream(shellHandle.shell.outputStream)
+            applyShellBootstrap(sessionPolicy)
 
             _state.value = SshSessionState.CONNECTED
             true
@@ -157,7 +174,9 @@ class SshSessionEngine @Inject constructor(
         }
     }
 
-    suspend fun reconnectLast(): Boolean {
+    suspend fun reconnectLast(
+        sessionPolicy: SessionPolicy = lastSessionPolicy
+    ): Boolean {
         val hostProfile = _currentHost.value ?: return false
         val capability = canReconnect()
         if (!capability.isAllowed) {
@@ -172,7 +191,8 @@ class SshSessionEngine @Inject constructor(
             allowOnlyKnownHosts = true,
             columns = lastColumns,
             rows = lastRows,
-            isReconnect = true
+            isReconnect = true,
+            sessionPolicy = sessionPolicy
         )
     }
 
@@ -229,11 +249,14 @@ class SshSessionEngine @Inject constructor(
     suspend fun resizeTerminal(columns: Int, rows: Int) {
         lastColumns = columns.coerceAtLeast(10)
         lastRows = rows.coerceAtLeast(5)
+        synchronized(terminalLock) {
+            _terminalRendererState.value = terminalEmulator.resize(lastColumns, lastRows)
+        }
         currentShellHandle?.let { shellChannelAdapter.resizePty(it, lastColumns, lastRows) }
     }
 
     fun clearTerminalOutput() {
-        _terminalOutput.value = ""
+        resetTerminalState()
     }
 
     fun clearSessionSecrets() {
@@ -242,8 +265,87 @@ class SshSessionEngine @Inject constructor(
         }
     }
 
-    private fun appendOutput(text: String) {
-        _terminalOutput.update { current -> current + text }
+    private fun resetTerminalState() {
+        synchronized(terminalLock) {
+            _terminalRendererState.value = terminalEmulator.reset(lastColumns, lastRows)
+        }
+    }
+
+    private fun resetShellStatus() {
+        tmuxConfirmationJob?.cancel()
+        tmuxConfirmationJob = null
+        tmuxMarkerCarry = byteArrayOf()
+        _shellStatus.value = SessionShellStatus()
+    }
+
+    private fun appendOutput(data: ByteArray) {
+        val sanitizedData = processBootstrapMarkers(data)
+        if (sanitizedData.isEmpty()) {
+            return
+        }
+
+        synchronized(terminalLock) {
+            _terminalRendererState.value = terminalEmulator.feed(sanitizedData)
+        }
+    }
+
+    private suspend fun applyShellBootstrap(sessionPolicy: SessionPolicy) {
+        val bootstrapPlan = ShellBootstrapPlanner.buildPlan(sessionPolicy)
+        _shellStatus.value = bootstrapPlan.initialStatus
+
+        val command = bootstrapPlan.command ?: return
+        inputWriter.writeString(command)
+        tmuxConfirmationJob?.cancel()
+        tmuxConfirmationJob = sessionScope?.launch {
+            delay(750)
+            if (_shellStatus.value.mode == SessionShellMode.TMUX_REQUESTED && _state.value == SshSessionState.CONNECTED) {
+                _shellStatus.value = SessionShellStatus(
+                    mode = SessionShellMode.TMUX_ATTACHED,
+                    message = "tmux session active"
+                )
+            }
+        }
+    }
+
+    private fun processBootstrapMarkers(data: ByteArray): ByteArray {
+        val markerBytes = ShellBootstrapPlanner.TMUX_FALLBACK_MARKER.encodeToByteArray()
+        val combined = tmuxMarkerCarry + data
+        if (combined.isEmpty()) {
+            return combined
+        }
+
+        val output = ArrayList<Byte>(combined.size)
+        var index = 0
+        while (index < combined.size) {
+            if (combined.matchesAt(index, markerBytes)) {
+                tmuxConfirmationJob?.cancel()
+                _shellStatus.value = SessionShellStatus(
+                    mode = SessionShellMode.TMUX_FALLBACK,
+                    message = "tmux unavailable, using shell"
+                )
+                index += markerBytes.size
+                while (index < combined.size && combined[index] in listOf('\r'.code.toByte(), '\n'.code.toByte())) {
+                    index++
+                }
+                continue
+            }
+
+            val tail = combined.copyOfRange(index, combined.size)
+            if (markerBytes.startsWith(tail) && tail.size < markerBytes.size) {
+                break
+            }
+
+            output += combined[index]
+            index++
+        }
+
+        tmuxMarkerCarry = if (index < combined.size) {
+            combined.copyOfRange(index, combined.size)
+        } else {
+            byteArrayOf()
+        }
+
+        return output.toByteArray()
     }
 
     private suspend fun authenticate(client: SSHClient, hostProfile: HostProfile): Boolean {
@@ -263,6 +365,8 @@ class SshSessionEngine @Inject constructor(
         preserveHost: Boolean,
         finalState: SshSessionState
     ) {
+        tmuxConfirmationJob?.cancel()
+        tmuxConfirmationJob = null
         sessionScope?.cancel()
         joinAll(*listOfNotNull(outputJob, errorJob).toTypedArray())
 
@@ -280,6 +384,8 @@ class SshSessionEngine @Inject constructor(
         sessionScope = null
         inputWriter.clear()
         hostKeyVerifier.clear()
+        tmuxMarkerCarry = byteArrayOf()
+        _shellStatus.value = SessionShellStatus()
 
         if (!preserveHost) {
             _currentHost.value = null
@@ -297,5 +403,31 @@ class SshSessionEngine @Inject constructor(
             _error.value = reason ?: "SSH session closed unexpectedly."
             cleanupSession(preserveHost = true, finalState = SshSessionState.ERROR)
         }
+    }
+
+    private fun ByteArray.matchesAt(startIndex: Int, candidate: ByteArray): Boolean {
+        if (startIndex + candidate.size > size) {
+            return false
+        }
+
+        for (offset in candidate.indices) {
+            if (this[startIndex + offset] != candidate[offset]) {
+                return false
+            }
+        }
+        return true
+    }
+
+    private fun ByteArray.startsWith(prefix: ByteArray): Boolean {
+        if (prefix.size > size) {
+            return false
+        }
+
+        for (index in prefix.indices) {
+            if (this[index] != prefix[index]) {
+                return false
+            }
+        }
+        return true
     }
 }

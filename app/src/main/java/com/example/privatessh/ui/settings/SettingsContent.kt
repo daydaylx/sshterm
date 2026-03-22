@@ -1,6 +1,7 @@
 package com.example.privatessh.ui.settings
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -9,6 +10,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -20,6 +22,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.privatessh.presentation.settings.SettingsUiState
 import com.example.privatessh.presentation.settings.SettingsViewModel
@@ -57,6 +60,7 @@ fun SettingsScreen(
             onGracePeriodChange = viewModel::setGracePeriod,
             onAutoReconnectToggle = viewModel::toggleAutoReconnect,
             onTmuxAutoAttachToggle = viewModel::toggleTmuxAutoAttach,
+            onTmuxSessionNameChange = viewModel::setTmuxSessionName,
             onFontSizeChange = viewModel::setTerminalFontSize,
             onBatteryOptimizationToggle = viewModel::toggleBatteryOptimization,
             onTailscaleDetectionToggle = viewModel::toggleTailscaleDetection,
@@ -75,6 +79,7 @@ fun SettingsContent(
     onGracePeriodChange: (Int) -> Unit,
     onAutoReconnectToggle: () -> Unit,
     onTmuxAutoAttachToggle: () -> Unit,
+    onTmuxSessionNameChange: (String) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onBatteryOptimizationToggle: () -> Unit,
     onTailscaleDetectionToggle: () -> Unit,
@@ -102,6 +107,16 @@ fun SettingsContent(
                 description = "Reconnect into tmux manually managed on the server",
                 checked = uiState.tmuxAutoAttach,
                 onCheckedChange = { onTmuxAutoAttachToggle() }
+            )
+            OutlinedTextField(
+                value = uiState.tmuxSessionName,
+                onValueChange = onTmuxSessionNameChange,
+                label = { Text("tmux session name") },
+                supportingText = { Text("Blank uses the default session name 'main'") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             )
         }
 

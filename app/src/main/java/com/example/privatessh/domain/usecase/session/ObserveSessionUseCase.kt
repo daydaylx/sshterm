@@ -3,6 +3,7 @@ package com.example.privatessh.domain.usecase.session
 import com.example.privatessh.ssh.SshSessionEngine
 import com.example.privatessh.ssh.SshSessionState
 import com.example.privatessh.domain.model.HostProfile
+import com.example.privatessh.terminal.TerminalRendererState
 import dagger.hilt.android.scopes.ViewModelScoped
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
@@ -29,8 +30,8 @@ class ObserveSessionUseCase @Inject constructor(
         return sessionEngine.error
     }
 
-    fun observeTerminalOutput(): StateFlow<String> {
-        return sessionEngine.terminalOutput
+    fun observeTerminalRendererState(): StateFlow<TerminalRendererState> {
+        return sessionEngine.terminalRendererState
     }
 
     fun observeCurrentHost(): StateFlow<HostProfile?> {

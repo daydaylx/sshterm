@@ -4,8 +4,8 @@ package com.example.privatessh.terminal
  * ANSI color and style attributes for terminal text.
  */
 data class TerminalTextAttribute(
-    val foregroundColor: TerminalColor? = null,
-    val backgroundColor: TerminalColor? = null,
+    val foregroundColor: TerminalColor = TerminalColor.Default,
+    val backgroundColor: TerminalColor = TerminalColor.Default,
     val bold: Boolean = false,
     val dim: Boolean = false,
     val italic: Boolean = false,

@@ -15,6 +15,9 @@ import com.example.privatessh.ssh.auth.PasswordAuthStrategy
 import com.example.privatessh.ssh.auth.PrivateKeyAuthStrategy
 import com.example.privatessh.ssh.hostkey.HostKeyDecision
 import com.example.privatessh.service.SessionRegistry
+import com.example.privatessh.terminal.TerminalCellPosition
+import com.example.privatessh.terminal.TerminalSelection
+import com.example.privatessh.terminal.extractSelectionText
 import com.example.privatessh.terminal.input.InputController
 import com.example.privatessh.terminal.input.ModifierKey
 import com.example.privatessh.terminal.input.SpecialKey
@@ -52,7 +55,19 @@ class TerminalViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             observeSessionUseCase().collect { sessionState ->
-                _uiState.value = _uiState.value.copy(sessionState = sessionState)
+                _uiState.value = _uiState.value.copy(
+                    sessionState = sessionState,
+                    selection = if (sessionState == com.example.privatessh.ssh.SshSessionState.CONNECTED) {
+                        _uiState.value.selection
+                    } else {
+                        null
+                    },
+                    selectedText = if (sessionState == com.example.privatessh.ssh.SshSessionState.CONNECTED) {
+                        _uiState.value.selectedText
+                    } else {
+                        ""
+                    }
+                )
             }
         }
         viewModelScope.launch {
@@ -61,8 +76,12 @@ class TerminalViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            observeSessionUseCase.observeTerminalOutput().collect { output ->
-                _uiState.value = _uiState.value.copy(terminalOutput = output)
+            observeSessionUseCase.observeTerminalRendererState().collect { rendererState ->
+                _uiState.value = _uiState.value.copy(
+                    rendererState = rendererState,
+                    terminalColumns = rendererState.columns,
+                    terminalRows = rendererState.screenRows
+                )
             }
         }
         viewModelScope.launch {
@@ -85,6 +104,11 @@ class TerminalViewModel @Inject constructor(
         viewModelScope.launch {
             getSettingsUseCase.observeKeepScreenOn().collect { keepScreenOn ->
                 _uiState.value = _uiState.value.copy(keepScreenOn = keepScreenOn)
+            }
+        }
+        viewModelScope.launch {
+            getSettingsUseCase.observeTerminalMetrics().collect { metrics ->
+                _uiState.value = _uiState.value.copy(terminalFontSizeSp = metrics.fontSize)
             }
         }
         updateModifierStates()
@@ -155,6 +179,7 @@ class TerminalViewModel @Inject constructor(
     }
 
     fun disconnect() {
+        clearSelection()
         viewModelScope.launch {
             stopSessionUseCase()
         }
@@ -170,7 +195,7 @@ class TerminalViewModel @Inject constructor(
 
     fun onKeyEvent(event: KeyEvent): Boolean {
         viewModelScope.launch {
-            inputController.handleKeyEvent(event)
+            inputController.handleKeyEvent(event, _uiState.value.rendererState)
             updateModifierStates()
         }
         return true
@@ -178,7 +203,7 @@ class TerminalViewModel @Inject constructor(
 
     fun onSpecialKeyClick(key: SpecialKey) {
         viewModelScope.launch {
-            inputController.handleSpecialKey(key)
+            inputController.handleSpecialKey(key, _uiState.value.rendererState)
             _effect.value = TerminalUiEffect.Vibrate
         }
     }
@@ -190,10 +215,46 @@ class TerminalViewModel @Inject constructor(
     }
 
     fun onTerminalResize(columns: Int, rows: Int) {
-        _uiState.value = _uiState.value.copy(terminalColumns = columns, terminalRows = rows)
+        _uiState.value = _uiState.value.copy(
+            terminalColumns = columns,
+            terminalRows = rows,
+            selection = null,
+            selectedText = ""
+        )
         viewModelScope.launch {
             resizeTerminalUseCase(columns, rows)
         }
+    }
+
+    fun startSelection(position: TerminalCellPosition) {
+        val selection = TerminalSelection(anchor = position)
+        _uiState.value = _uiState.value.copy(
+            selection = selection,
+            selectedText = _uiState.value.rendererState.extractSelectionText(selection)
+        )
+    }
+
+    fun updateSelection(position: TerminalCellPosition) {
+        val currentSelection = _uiState.value.selection ?: return
+        val updatedSelection = currentSelection.copy(focus = position)
+        _uiState.value = _uiState.value.copy(
+            selection = updatedSelection,
+            selectedText = _uiState.value.rendererState.extractSelectionText(updatedSelection)
+        )
+    }
+
+    fun clearSelection() {
+        _uiState.value = _uiState.value.copy(
+            selection = null,
+            selectedText = ""
+        )
+    }
+
+    fun onSelectionCopied() {
+        if (_uiState.value.selectedText.isNotBlank()) {
+            _effect.value = TerminalUiEffect.ShowToast("Copied terminal selection")
+        }
+        clearSelection()
     }
 
     fun navigateBack() {
@@ -216,7 +277,11 @@ class TerminalViewModel @Inject constructor(
     private fun connectCurrentHost() {
         val host = currentHost ?: return
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                selection = null,
+                selectedText = ""
+            )
             val success = startSessionUseCase(
                 hostProfile = host,
                 onHostKeyUnknown = { algorithm, fingerprint ->

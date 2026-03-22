@@ -38,10 +38,14 @@ class SessionNotificationFactory @Inject constructor(
         createNotificationChannel()
     }
 
-    fun createSessionNotification(hostName: String, sessionId: String): Notification =
+    fun createSessionNotification(
+        hostName: String,
+        sessionId: String,
+        sessionDetail: String? = null
+    ): Notification =
         NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(context.getString(R.string.notification_session_active, hostName))
-            .setContentText(hostName)
+            .setContentText(sessionDetail?.let { "$hostName · $it" } ?: hostName)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -75,11 +79,22 @@ class SessionNotificationFactory @Inject constructor(
     fun createGracePeriodNotification(
         hostName: String,
         sessionId: String,
-        minutesRemaining: Int
+        minutesRemaining: Int,
+        sessionDetail: String? = null
     ): Notification =
         NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("SSH session in grace period")
-            .setContentText("$hostName · $minutesRemaining min remaining")
+            .setContentText(
+                buildString {
+                    append(hostName)
+                    append(" · ")
+                    append("$minutesRemaining min remaining")
+                    sessionDetail?.let {
+                        append(" · ")
+                        append(it)
+                    }
+                }
+            )
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

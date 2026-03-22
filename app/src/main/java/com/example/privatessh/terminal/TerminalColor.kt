@@ -1,89 +1,32 @@
 package com.example.privatessh.terminal
 
 /**
- * ANSI color codes for terminal display.
+ * Terminal color model backed by the xterm 256-color palette.
  */
-enum class TerminalColor(val code: Int, val isBright: Boolean = false) {
-    // Standard colors
-    BLACK(0),
-    RED(1),
-    GREEN(2),
-    YELLOW(3),
-    BLUE(4),
-    MAGENTA(5),
-    CYAN(6),
-    WHITE(7),
+sealed class TerminalColor {
+    data object Default : TerminalColor()
 
-    // Bright colors (high intensity)
-    BRIGHT_BLACK(0, true),
-    BRIGHT_RED(1, true),
-    BRIGHT_GREEN(2, true),
-    BRIGHT_YELLOW(3, true),
-    BRIGHT_BLUE(4, true),
-    BRIGHT_MAGENTA(5, true),
-    BRIGHT_CYAN(6, true),
-    BRIGHT_WHITE(7, true),
-
-    // Special colors
-    DEFAULT(9),
-
-    // 256-color palette (simplified)
-    COLOR_16(16),
-    COLOR_255(255);
-
-    /**
-     * Returns the ANSI code for foreground color.
-     */
-    fun toForegroundCode(): Int {
-        return if (isBright) {
-            90 + code  // Bright foreground: 90-97
-        } else {
-            30 + code  // Standard foreground: 30-37
+    data class Indexed(val value: Int) : TerminalColor() {
+        init {
+            require(value in 0..255) { "Palette index must be within 0..255." }
         }
     }
 
-    /**
-     * Returns the ANSI code for background color.
-     */
-    fun toBackgroundCode(): Int {
-        return if (isBright) {
-            100 + code  // Bright background: 100-107
-        } else {
-            40 + code  // Standard background: 40-47
-        }
-    }
-
-    /**
-     * Returns true if this is a 256-color palette color.
-     */
-    fun isPaletteColor(): Boolean {
-        return code in 16..255
-    }
+    fun isDefault(): Boolean = this is Default
 
     companion object {
-        /**
-         * Parses an ANSI color code to a TerminalColor.
-         */
-        fun fromAnsiCode(code: Int, isBackground: Boolean): TerminalColor {
-            return when {
-                code >= 90 && code <= 97 -> {
-                    // Bright foreground
-                    entries.find { it.code == code - 90 && it.isBright } ?: DEFAULT
-                }
-                code >= 100 && code <= 107 -> {
-                    // Bright background
-                    entries.find { it.code == code - 100 && it.isBright } ?: DEFAULT
-                }
-                code in 30..37 -> {
-                    // Standard foreground
-                    entries.find { it.code == code - 30 && !it.isBright } ?: DEFAULT
-                }
-                code in 40..47 -> {
-                    // Standard background
-                    entries.find { it.code == code - 40 && !it.isBright } ?: DEFAULT
-                }
-                else -> DEFAULT
+        fun fromAnsiCode(code: Int, isBackground: Boolean = false): TerminalColor {
+            val paletteIndex = when {
+                !isBackground && code in 30..37 -> code - 30
+                isBackground && code in 40..47 -> code - 40
+                !isBackground && code in 90..97 -> code - 90 + 8
+                isBackground && code in 100..107 -> code - 100 + 8
+                else -> return Default
             }
+
+            return Indexed(paletteIndex)
         }
+
+        fun fromPaletteIndex(index: Int): TerminalColor = Indexed(index.coerceIn(0, 255))
     }
 }

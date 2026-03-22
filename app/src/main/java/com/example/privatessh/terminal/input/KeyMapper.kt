@@ -12,27 +12,62 @@ class KeyMapper @Inject constructor() {
      * Maps a KeyEvent to terminal escape sequence.
      * @param event The Android KeyEvent
      * @param activeModifiers Currently active modifier keys
+     * @param applicationCursorKeys Whether the terminal currently expects SS3 cursor keys
      * @return ByteArray to send to SSH session, or null if key should be ignored
      */
     fun mapKeyEvent(
         event: KeyEvent,
-        activeModifiers: Set<ModifierKey>
+        activeModifiers: Set<ModifierKey>,
+        applicationCursorKeys: Boolean = false
     ): ByteArray? {
         val keyCode = event.keyCode
         val unicodeChar = event.unicodeChar.toChar()
 
-        // Check if it's a special key first
-        val specialKey = getSpecialKey(event.keyCode)
+        val specialKey = getSpecialKey(keyCode)
         if (specialKey != null && !specialKey.isModifier()) {
-            return specialKey.escapeSequence
+            return mapSpecialKey(specialKey, applicationCursorKeys)
         }
 
-        // Handle character input with modifiers
         if (unicodeChar.code > 0) {
             return mapCharWithModifiers(unicodeChar, activeModifiers)
         }
 
         return null
+    }
+
+    fun mapSpecialKey(
+        key: SpecialKey,
+        applicationCursorKeys: Boolean = false
+    ): ByteArray = when (key) {
+        SpecialKey.CTRL,
+        SpecialKey.ALT,
+        SpecialKey.SHIFT -> byteArrayOf()
+        SpecialKey.ESC -> byteArrayOf(0x1B.toByte())
+        SpecialKey.TAB -> byteArrayOf(0x09.toByte())
+        SpecialKey.ENTER -> byteArrayOf(0x0D.toByte())
+        SpecialKey.ARROW_UP -> cursorKey('A', applicationCursorKeys)
+        SpecialKey.ARROW_DOWN -> cursorKey('B', applicationCursorKeys)
+        SpecialKey.ARROW_RIGHT -> cursorKey('C', applicationCursorKeys)
+        SpecialKey.ARROW_LEFT -> cursorKey('D', applicationCursorKeys)
+        SpecialKey.HOME -> if (applicationCursorKeys) ss3('H') else csi("H")
+        SpecialKey.END -> if (applicationCursorKeys) ss3('F') else csi("F")
+        SpecialKey.PGUP -> csi("5~")
+        SpecialKey.PGDN -> csi("6~")
+        SpecialKey.INSERT -> csi("2~")
+        SpecialKey.DELETE -> csi("3~")
+        SpecialKey.F1 -> ss3('P')
+        SpecialKey.F2 -> ss3('Q')
+        SpecialKey.F3 -> ss3('R')
+        SpecialKey.F4 -> ss3('S')
+        SpecialKey.F5 -> csi("15~")
+        SpecialKey.F6 -> csi("17~")
+        SpecialKey.F7 -> csi("18~")
+        SpecialKey.F8 -> csi("19~")
+        SpecialKey.F9 -> csi("20~")
+        SpecialKey.F10 -> csi("21~")
+        SpecialKey.F11 -> csi("23~")
+        SpecialKey.F12 -> csi("24~")
+        SpecialKey.BACKTAB -> csi("Z")
     }
 
     /**
@@ -47,22 +82,10 @@ class KeyMapper @Inject constructor() {
         val hasAlt = ModifierKey.ALT in modifiers
 
         return when {
-            hasCtrl && hasAlt -> {
-                // Ctrl+Alt+char: ESC + Ctrl+char
-                byteArrayOf(0x1B.toByte(), mapCtrlChar(char))
-            }
-            hasAlt -> {
-                // Alt+char: ESC + char
-                mapAltChar(char)
-            }
-            hasCtrl -> {
-                // Ctrl+char: Control character
-                byteArrayOf(mapCtrlChar(char))
-            }
-            else -> {
-                // Plain character
-                char.code.toByte().let { byteArrayOf(it) }
-            }
+            hasCtrl && hasAlt -> byteArrayOf(0x1B.toByte(), mapCtrlChar(char))
+            hasAlt -> mapAltChar(char)
+            hasCtrl -> byteArrayOf(mapCtrlChar(char))
+            else -> char.code.toByte().let { byteArrayOf(it) }
         }
     }
 
@@ -111,10 +134,10 @@ class KeyMapper @Inject constructor() {
         return when (char) {
             in 'a'..'z' -> (char.code - 'a'.code + 1).toByte()
             in 'A'..'Z' -> (char.code - 'A'.code + 1).toByte()
-            ' ' -> 0x00.toByte() // NUL
-            '[' -> 0x1B.toByte() // ESC
-            '?' -> 0x7F.toByte() // DEL
-            '@' -> 0x00.toByte() // NUL
+            ' ' -> 0x00.toByte()
+            '[' -> 0x1B.toByte()
+            '?' -> 0x7F.toByte()
+            '@' -> 0x00.toByte()
             else -> char.code.toByte()
         }
     }
@@ -143,4 +166,17 @@ class KeyMapper @Inject constructor() {
             KeyEvent.KEYCODE_ENDCALL
         )
     }
+
+    private fun cursorKey(finalChar: Char, applicationCursorKeys: Boolean): ByteArray =
+        if (applicationCursorKeys) {
+            ss3(finalChar)
+        } else {
+            csi(finalChar.toString())
+        }
+
+    private fun ss3(finalChar: Char): ByteArray =
+        byteArrayOf(0x1B.toByte(), 'O'.code.toByte(), finalChar.code.toByte())
+
+    private fun csi(sequence: String): ByteArray =
+        byteArrayOf(0x1B.toByte(), '['.code.toByte()) + sequence.encodeToByteArray()
 }

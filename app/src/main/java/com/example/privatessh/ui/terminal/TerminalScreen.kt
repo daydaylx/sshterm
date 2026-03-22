@@ -26,8 +26,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -50,6 +52,7 @@ fun TerminalScreen(
     val effect by viewModel.effect.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val view = LocalView.current
     var showDisconnectDialog by remember { mutableStateOf(false) }
     var password by rememberSaveable { mutableStateOf("") }
@@ -165,6 +168,24 @@ fun TerminalScreen(
         },
         bottomBar = {
             Column {
+                TerminalSelectionToolbar(
+                    hasSelection = uiState.hasSelection,
+                    selectedText = uiState.selectedText,
+                    onCopy = {
+                        if (uiState.selectedText.isNotBlank()) {
+                            clipboardManager.setText(AnnotatedString(uiState.selectedText))
+                            viewModel.onSelectionCopied()
+                        }
+                    },
+                    onPaste = {
+                        val clipboardText = clipboardManager.getText()?.text.orEmpty()
+                        if (clipboardText.isNotBlank()) {
+                            viewModel.onTextInput(clipboardText)
+                            viewModel.clearSelection()
+                        }
+                    },
+                    onCancel = viewModel::clearSelection
+                )
                 OutlinedTextField(
                     value = inputBuffer,
                     onValueChange = { newValue ->
@@ -193,8 +214,13 @@ fun TerminalScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         TerminalViewport(
-            terminalOutput = uiState.terminalOutput,
+            rendererState = uiState.rendererState,
+            selection = uiState.selection,
+            fontSizeSp = uiState.terminalFontSizeSp,
             onResize = viewModel::onTerminalResize,
+            onSelectionStart = viewModel::startSelection,
+            onSelectionDrag = viewModel::updateSelection,
+            onSelectionClear = viewModel::clearSelection,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)

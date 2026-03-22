@@ -1,0 +1,60 @@
+package com.example.privatessh.ssh
+
+import com.example.privatessh.domain.model.SessionPolicy
+
+enum class SessionShellMode {
+    SHELL,
+    TMUX_REQUESTED,
+    TMUX_ATTACHED,
+    TMUX_FALLBACK
+}
+
+data class SessionShellStatus(
+    val mode: SessionShellMode = SessionShellMode.SHELL,
+    val message: String? = null
+)
+
+data class ShellBootstrapPlan(
+    val command: String?,
+    val initialStatus: SessionShellStatus
+)
+
+object ShellBootstrapPlanner {
+    const val DEFAULT_TMUX_SESSION_NAME = "main"
+    const val TMUX_FALLBACK_MARKER = "__SSHAPP_TMUX_FALLBACK__"
+
+    fun buildPlan(policy: SessionPolicy): ShellBootstrapPlan {
+        if (!policy.tmuxAutoAttach) {
+            return ShellBootstrapPlan(
+                command = null,
+                initialStatus = SessionShellStatus()
+            )
+        }
+
+        val sessionName = normalizeTmuxSessionName(policy.tmuxSessionName)
+        val quotedSessionName = shellQuote(sessionName)
+        val command = buildString {
+            append("if command -v tmux >/dev/null 2>&1; then ")
+            append("tmux attach -t $quotedSessionName || tmux new -s $quotedSessionName || printf '$TMUX_FALLBACK_MARKER\\n'; ")
+            append("else printf '$TMUX_FALLBACK_MARKER\\n'; ")
+            append("fi\n")
+        }
+
+        return ShellBootstrapPlan(
+            command = command,
+            initialStatus = SessionShellStatus(
+                mode = SessionShellMode.TMUX_REQUESTED,
+                message = "tmux attach/create requested"
+            )
+        )
+    }
+
+    fun normalizeTmuxSessionName(rawName: String?): String =
+        rawName
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: DEFAULT_TMUX_SESSION_NAME
+
+    private fun shellQuote(value: String): String =
+        "'" + value.replace("'", "'\"'\"'") + "'"
+}

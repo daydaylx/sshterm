@@ -14,7 +14,10 @@ class HardwareKeyMapper @Inject constructor(
      * Processes a hardware keyboard KeyEvent.
      * @return ByteArray to send to SSH, or null if key should be ignored
      */
-    fun handleKeyEvent(event: KeyEvent): ByteArray? {
+    fun handleKeyEvent(
+        event: KeyEvent,
+        applicationCursorKeys: Boolean = false
+    ): ByteArray? {
         // Ignore system keys
         if (keyMapper.isSystemKey(event.keyCode)) {
             return null
@@ -29,7 +32,7 @@ class HardwareKeyMapper @Inject constructor(
         val hardwareModifiers = extractModifiers(event)
 
         // Map the key event with hardware modifiers
-        return keyMapper.mapKeyEvent(event, hardwareModifiers)
+        return keyMapper.mapKeyEvent(event, hardwareModifiers, applicationCursorKeys)
     }
 
     /**

@@ -30,7 +30,6 @@ object DatabaseModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            .fallbackToDestructiveMigration() // TODO: Add proper migrations
             .build()
     }
 

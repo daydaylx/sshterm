@@ -1,6 +1,7 @@
 package com.example.privatessh.domain.usecase.session
 
 import com.example.privatessh.domain.model.HostProfile
+import com.example.privatessh.domain.repository.SettingsRepository
 import com.example.privatessh.ssh.SshSessionEngine
 import com.example.privatessh.ssh.hostkey.HostKeyDecision
 import dagger.hilt.android.scopes.ViewModelScoped
@@ -16,7 +17,8 @@ import javax.inject.Inject
  */
 @ViewModelScoped
 class StartSessionUseCase @Inject constructor(
-    private val sessionEngine: SshSessionEngine
+    private val sessionEngine: SshSessionEngine,
+    private val settingsRepository: SettingsRepository
 ) {
 
     suspend operator fun invoke(
@@ -26,11 +28,13 @@ class StartSessionUseCase @Inject constructor(
         rows: Int = 24
     ): Boolean = withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
+            val sessionPolicy = settingsRepository.getSessionPolicy()
             sessionEngine.connect(
                 hostProfile = hostProfile,
                 onHostKeyDecision = onHostKeyUnknown,
                 columns = columns,
-                rows = rows
+                rows = rows,
+                sessionPolicy = sessionPolicy
             )
         } catch (e: Exception) {
             false

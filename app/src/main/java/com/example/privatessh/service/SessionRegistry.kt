@@ -1,6 +1,7 @@
 package com.example.privatessh.service
 
 import com.example.privatessh.domain.model.AuthType
+import com.example.privatessh.ssh.SessionShellMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +16,8 @@ data class ActiveSession(
     val reconnectAllowed: Boolean,
     val passwordCached: Boolean,
     val privateKeyAvailable: Boolean,
+    val shellMode: SessionShellMode = SessionShellMode.SHELL,
+    val shellStatus: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -53,14 +56,15 @@ class SessionRegistry @Inject constructor() {
             activeSession = session,
             sessionCount = 1,
             graceMinutesRemaining = 0,
-            statusMessage = null
+            statusMessage = session.shellStatus
         )
     }
 
     fun updateSession(session: ActiveSession) {
         _runtimeState.value = _runtimeState.value.copy(
             activeSession = session,
-            sessionCount = 1
+            sessionCount = 1,
+            statusMessage = session.shellStatus
         )
     }
 

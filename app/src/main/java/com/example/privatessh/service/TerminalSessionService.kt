@@ -4,7 +4,9 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import com.example.privatessh.domain.model.AuthType
+import com.example.privatessh.domain.model.SessionPolicy
 import com.example.privatessh.domain.repository.SettingsRepository
+import com.example.privatessh.ssh.SessionShellMode
 import com.example.privatessh.ssh.SshSessionEngine
 import com.example.privatessh.ssh.SshSessionState
 import dagger.hilt.android.AndroidEntryPoint
@@ -39,12 +41,14 @@ class TerminalSessionService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var autoReconnectEnabled: Boolean = true
+    private var currentSessionPolicy: SessionPolicy = SessionPolicy()
 
     override fun onCreate() {
         super.onCreate()
         observeSettings()
         observeGracePeriod()
         observeEngineState()
+        observeShellStatus()
     }
 
     override fun onBind(intent: Intent?): IBinder = SessionServiceBinder(this)
@@ -98,7 +102,11 @@ class TerminalSessionService : Service() {
         sessionRegistry.registerSession(activeSession)
         startForeground(
             SessionNotificationFactory.NOTIFICATION_ID,
-            notificationFactory.createSessionNotification(activeSession.hostName, activeSession.sessionId)
+            notificationFactory.createSessionNotification(
+                hostName = activeSession.hostName,
+                sessionId = activeSession.sessionId,
+                sessionDetail = activeSession.shellStatus
+            )
         )
     }
 
@@ -143,7 +151,7 @@ class TerminalSessionService : Service() {
         )
 
         serviceScope.launch {
-            val reconnected = sessionEngine.reconnectLast()
+            val reconnected = sessionEngine.reconnectLast(currentSessionPolicy)
             if (reconnected) {
                 val connectedSession = buildActiveSession(
                     sessionId = refreshedSession.sessionId,
@@ -153,7 +161,8 @@ class TerminalSessionService : Service() {
                 notificationFactory.updateNotification(
                     notificationFactory.createSessionNotification(
                         hostName = connectedSession.hostName,
-                        sessionId = connectedSession.sessionId
+                        sessionId = connectedSession.sessionId,
+                        sessionDetail = connectedSession.shellStatus
                     )
                 )
             } else {
@@ -189,6 +198,7 @@ class TerminalSessionService : Service() {
     private fun observeSettings() {
         serviceScope.launch {
             settingsRepository.observeSessionPolicy().collectLatest { policy ->
+                currentSessionPolicy = policy
                 graceController.gracePeriodMinutes = policy.gracePeriodMinutes
                 autoReconnectEnabled = policy.autoReconnect
             }
@@ -206,7 +216,8 @@ class TerminalSessionService : Service() {
                             notificationFactory.updateNotification(
                                 notificationFactory.createSessionNotification(
                                     hostName = activeSession.hostName,
-                                    sessionId = activeSession.sessionId
+                                    sessionId = activeSession.sessionId,
+                                    sessionDetail = activeSession.shellStatus
                                 )
                             )
                         }
@@ -218,7 +229,8 @@ class TerminalSessionService : Service() {
                             notificationFactory.createGracePeriodNotification(
                                 hostName = activeSession.hostName,
                                 sessionId = activeSession.sessionId,
-                                minutesRemaining = state.minutesRemaining
+                                minutesRemaining = state.minutesRemaining,
+                                sessionDetail = activeSession.shellStatus
                             )
                         )
                     }
@@ -245,7 +257,8 @@ class TerminalSessionService : Service() {
                         notificationFactory.updateNotification(
                             notificationFactory.createSessionNotification(
                                 hostName = connectedSession.hostName,
-                                sessionId = connectedSession.sessionId
+                                sessionId = connectedSession.sessionId,
+                                sessionDetail = connectedSession.shellStatus
                             )
                         )
                     }
@@ -288,9 +301,48 @@ class TerminalSessionService : Service() {
         }
     }
 
+    private fun observeShellStatus() {
+        serviceScope.launch {
+            sessionEngine.shellStatus.collectLatest { shellStatus ->
+                val activeSession = sessionRegistry.getActiveSession() ?: return@collectLatest
+                val updatedSession = activeSession.copy(
+                    shellMode = shellStatus.mode,
+                    shellStatus = shellStatus.message
+                )
+                sessionRegistry.updateSession(updatedSession)
+
+                when (sessionRegistry.runtimeState.value.lifecycleState) {
+                    SessionLifecycleState.CONNECTED -> {
+                        notificationFactory.updateNotification(
+                            notificationFactory.createSessionNotification(
+                                hostName = updatedSession.hostName,
+                                sessionId = updatedSession.sessionId,
+                                sessionDetail = updatedSession.shellStatus
+                            )
+                        )
+                    }
+
+                    SessionLifecycleState.GRACE -> {
+                        notificationFactory.updateNotification(
+                            notificationFactory.createGracePeriodNotification(
+                                hostName = updatedSession.hostName,
+                                sessionId = updatedSession.sessionId,
+                                minutesRemaining = sessionRegistry.runtimeState.value.graceMinutesRemaining,
+                                sessionDetail = updatedSession.shellStatus
+                            )
+                        )
+                    }
+
+                    else -> Unit
+                }
+            }
+        }
+    }
+
     private fun buildActiveSession(sessionId: String, fallbackHostName: String): ActiveSession {
         val host = sessionEngine.currentHost.value
         val capability = sessionEngine.canReconnect()
+        val shellStatus = sessionEngine.shellStatus.value
         return ActiveSession(
             sessionId = sessionId,
             hostId = host?.id ?: sessionId,
@@ -298,7 +350,9 @@ class TerminalSessionService : Service() {
             authType = host?.authType ?: AuthType.PASSWORD,
             reconnectAllowed = capability.isAllowed,
             passwordCached = capability.passwordCached,
-            privateKeyAvailable = capability.privateKeyAvailable
+            privateKeyAvailable = capability.privateKeyAvailable,
+            shellMode = shellStatus.mode,
+            shellStatus = shellStatus.message
         )
     }
 }

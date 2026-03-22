@@ -10,6 +10,7 @@ data class SettingsUiState(
     val gracePeriodMinutes: Int = 10,
     val autoReconnect: Boolean = true,
     val tmuxAutoAttach: Boolean = false,
+    val tmuxSessionName: String = "",
     val terminalFontSize: Float = 14f,
     val batteryOptimizationDisabled: Boolean = false,
     val tailscaleHostTypeDetection: Boolean = true,

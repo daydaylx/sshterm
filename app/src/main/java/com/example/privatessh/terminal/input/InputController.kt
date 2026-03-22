@@ -2,6 +2,7 @@ package com.example.privatessh.terminal.input
 
 import android.view.KeyEvent
 import com.example.privatessh.ssh.io.InputWriter
+import com.example.privatessh.terminal.TerminalRendererState
 import dagger.hilt.android.scopes.ViewModelScoped
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,7 +45,10 @@ class InputController @Inject constructor(
      * Handles KeyEvent from any source (software or hardware keyboard).
      * Returns true if the key was handled, false if it should be ignored.
      */
-    suspend fun handleKeyEvent(event: KeyEvent): Boolean {
+    suspend fun handleKeyEvent(
+        event: KeyEvent,
+        rendererState: TerminalRendererState
+    ): Boolean {
         withContext(Dispatchers.IO) {
             // Ignore system keys
             if (keyMapper.isSystemKey(event.keyCode)) {
@@ -55,7 +59,10 @@ class InputController @Inject constructor(
             if (hardwareKeyMapper.hasHardwareModifiers(event)) {
                 // Hardware keyboard: use hardware modifiers, clear sticky ones
                 modifierKeyState.releaseAll()
-                val bytes = hardwareKeyMapper.handleKeyEvent(event)
+                val bytes = hardwareKeyMapper.handleKeyEvent(
+                    event = event,
+                    applicationCursorKeys = rendererState.isApplicationCursorKeys
+                )
                 if (bytes != null) {
                     write(bytes)
                 }
@@ -65,7 +72,11 @@ class InputController @Inject constructor(
             // Software keyboard / virtual keys: check active sticky modifiers
             val activeModifiers = modifierKeyState.getActiveModifiers()
             if (activeModifiers.isNotEmpty()) {
-                val bytes = keyMapper.mapKeyEvent(event, activeModifiers)
+                val bytes = keyMapper.mapKeyEvent(
+                    event = event,
+                    activeModifiers = activeModifiers,
+                    applicationCursorKeys = rendererState.isApplicationCursorKeys
+                )
                 if (bytes != null) {
                     write(bytes)
                     // Consume one-shot modifiers after sending
@@ -73,7 +84,11 @@ class InputController @Inject constructor(
                 }
             } else {
                 // No modifiers, map directly
-                val bytes = keyMapper.mapKeyEvent(event, emptySet())
+                val bytes = keyMapper.mapKeyEvent(
+                    event = event,
+                    activeModifiers = emptySet(),
+                    applicationCursorKeys = rendererState.isApplicationCursorKeys
+                )
                 if (bytes != null) {
                     write(bytes)
                 }
@@ -87,10 +102,18 @@ class InputController @Inject constructor(
     /**
      * Handles special key button click.
      */
-    suspend fun handleSpecialKey(key: SpecialKey) {
+    suspend fun handleSpecialKey(
+        key: SpecialKey,
+        rendererState: TerminalRendererState
+    ) {
         withContext(Dispatchers.IO) {
             // Special keys don't consume modifiers
-            write(key.escapeSequence)
+            write(
+                keyMapper.mapSpecialKey(
+                    key = key,
+                    applicationCursorKeys = rendererState.isApplicationCursorKeys
+                )
+            )
         }
     }
 

@@ -40,7 +40,11 @@ fun SessionStatusBar(
             "Disconnecting..." to MaterialTheme.colorScheme.surfaceVariant
 
         else -> when (sessionState) {
-            SshSessionState.CONNECTED -> "Connected to $hostName" to MaterialTheme.colorScheme.primaryContainer
+            SshSessionState.CONNECTED ->
+                (
+                    statusMessage?.let { "Connected to $hostName · $it" }
+                        ?: "Connected to $hostName"
+                    ) to MaterialTheme.colorScheme.primaryContainer
             SshSessionState.CONNECTING,
             SshSessionState.RECONNECTING -> "Connecting to $hostName..." to MaterialTheme.colorScheme.tertiaryContainer
             SshSessionState.AUTHENTICATING -> "Authenticating..." to MaterialTheme.colorScheme.tertiaryContainer

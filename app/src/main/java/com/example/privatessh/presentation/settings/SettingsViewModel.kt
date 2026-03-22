@@ -26,6 +26,7 @@ class SettingsViewModel @Inject constructor(
                     gracePeriodMinutes = policy.gracePeriodMinutes,
                     autoReconnect = policy.autoReconnect,
                     tmuxAutoAttach = policy.tmuxAutoAttach,
+                    tmuxSessionName = policy.tmuxSessionName.orEmpty(),
                     terminalFontSize = metrics.fontSize,
                     isLoading = false
                 )
@@ -68,6 +69,13 @@ class SettingsViewModel @Inject constructor(
             val value = !_uiState.value.tmuxAutoAttach
             _uiState.value = _uiState.value.copy(tmuxAutoAttach = value)
             updateSettingsUseCase.setTmuxAutoAttach(value)
+        }
+    }
+
+    fun setTmuxSessionName(name: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(tmuxSessionName = name)
+            updateSettingsUseCase.setTmuxSessionName(name.trim().ifEmpty { null })
         }
     }
 
