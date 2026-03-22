@@ -33,4 +33,13 @@ class GetSettingsUseCase @Inject constructor(
      */
     fun observeTerminalMetrics(): Flow<TerminalMetrics> =
         settingsRepository.observeTerminalMetrics()
+
+    fun observeBatteryOptimizationDisabled(): Flow<Boolean> =
+        settingsRepository.observeBatteryOptimizationDisabled()
+
+    fun observeTailscaleHostTypeDetection(): Flow<Boolean> =
+        settingsRepository.observeTailscaleHostTypeDetection()
+
+    fun observeKeepScreenOn(): Flow<Boolean> =
+        settingsRepository.observeKeepScreenOn()
 }

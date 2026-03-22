@@ -26,6 +26,7 @@ class SessionNotificationFactory @Inject constructor(
         const val CHANNEL_ID = "ssh_session_channel"
         const val NOTIFICATION_ID = 1001
 
+        const val ACTION_START_SESSION = "com.example.privatessh.action.START_SESSION"
         const val ACTION_RECONNECT = "com.example.privatessh.action.RECONNECT"
         const val ACTION_DISCONNECT = "com.example.privatessh.action.DISCONNECT"
     }
@@ -52,30 +53,61 @@ class SessionNotificationFactory @Inject constructor(
             )
             .build()
 
-    fun createGracePeriodNotification(hostName: String, minutesRemaining: Int): Notification =
+    fun createReconnectingNotification(
+        hostName: String,
+        sessionId: String,
+        reason: String?
+    ): Notification =
+        NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle("Reconnecting SSH session")
+            .setContentText(reason ?: hostName)
+            .setSmallIcon(android.R.drawable.ic_popup_sync)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(createOpenAppIntent(sessionId))
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                context.getString(R.string.notification_action_disconnect),
+                createServiceAction(ACTION_DISCONNECT, sessionId)
+            )
+            .build()
+
+    fun createGracePeriodNotification(
+        hostName: String,
+        sessionId: String,
+        minutesRemaining: Int
+    ): Notification =
         NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("SSH session in grace period")
             .setContentText("$hostName · $minutesRemaining min remaining")
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setContentIntent(createOpenAppIntent(null))
+            .setContentIntent(createOpenAppIntent(sessionId))
             .build()
 
-    fun createDisconnectedNotification(hostName: String, sessionId: String): Notification =
-        NotificationCompat.Builder(context, CHANNEL_ID)
+    fun createDisconnectedNotification(
+        hostName: String,
+        sessionId: String,
+        reason: String?,
+        canReconnect: Boolean
+    ): Notification {
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("SSH session disconnected")
-            .setContentText(hostName)
+            .setContentText(reason ?: hostName)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setOngoing(false)
             .setOnlyAlertOnce(true)
             .setContentIntent(createOpenAppIntent(sessionId))
-            .addAction(
+        if (canReconnect) {
+            builder.addAction(
                 android.R.drawable.ic_menu_rotate,
                 "Reconnect",
                 createServiceAction(ACTION_RECONNECT, sessionId)
             )
-            .build()
+        }
+        return builder.build()
+    }
 
     fun cancelNotification() {
         notificationManager.cancel(NOTIFICATION_ID)

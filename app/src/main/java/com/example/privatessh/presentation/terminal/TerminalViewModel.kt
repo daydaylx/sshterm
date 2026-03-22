@@ -10,9 +10,11 @@ import com.example.privatessh.domain.usecase.session.ObserveSessionUseCase
 import com.example.privatessh.domain.usecase.session.ResizeTerminalUseCase
 import com.example.privatessh.domain.usecase.session.StartSessionUseCase
 import com.example.privatessh.domain.usecase.session.StopSessionUseCase
+import com.example.privatessh.domain.usecase.settings.GetSettingsUseCase
 import com.example.privatessh.ssh.auth.PasswordAuthStrategy
 import com.example.privatessh.ssh.auth.PrivateKeyAuthStrategy
 import com.example.privatessh.ssh.hostkey.HostKeyDecision
+import com.example.privatessh.service.SessionRegistry
 import com.example.privatessh.terminal.input.InputController
 import com.example.privatessh.terminal.input.ModifierKey
 import com.example.privatessh.terminal.input.SpecialKey
@@ -32,6 +34,8 @@ class TerminalViewModel @Inject constructor(
     private val observeSessionUseCase: ObserveSessionUseCase,
     private val resizeTerminalUseCase: ResizeTerminalUseCase,
     private val getHostByIdUseCase: GetHostByIdUseCase,
+    private val getSettingsUseCase: GetSettingsUseCase,
+    private val sessionRegistry: SessionRegistry,
     private val passwordAuthStrategy: PasswordAuthStrategy,
     private val privateKeyAuthStrategy: PrivateKeyAuthStrategy
 ) : ViewModel() {
@@ -66,11 +70,44 @@ class TerminalViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(hostName = host?.getDisplayName().orEmpty())
             }
         }
+        viewModelScope.launch {
+            sessionRegistry.runtimeState.collect { runtimeState ->
+                val sessionHostName = runtimeState.activeSession?.hostName
+                _uiState.value = _uiState.value.copy(
+                    lifecycleState = runtimeState.lifecycleState,
+                    canReconnect = runtimeState.canReconnect,
+                    graceMinutesRemaining = runtimeState.graceMinutesRemaining,
+                    statusMessage = runtimeState.statusMessage,
+                    hostName = sessionHostName ?: _uiState.value.hostName
+                )
+            }
+        }
+        viewModelScope.launch {
+            getSettingsUseCase.observeKeepScreenOn().collect { keepScreenOn ->
+                _uiState.value = _uiState.value.copy(keepScreenOn = keepScreenOn)
+            }
+        }
         updateModifierStates()
     }
 
     fun connect(hostId: String) {
         viewModelScope.launch {
+            val activeHost = observeSessionUseCase.getCurrentHost()
+            val currentState = observeSessionUseCase.getCurrentState()
+            if (
+                activeHost?.id == hostId &&
+                currentState in setOf(
+                    com.example.privatessh.ssh.SshSessionState.CONNECTED,
+                    com.example.privatessh.ssh.SshSessionState.CONNECTING,
+                    com.example.privatessh.ssh.SshSessionState.RECONNECTING,
+                    com.example.privatessh.ssh.SshSessionState.AUTHENTICATING
+                )
+            ) {
+                currentHost = activeHost
+                _uiState.value = _uiState.value.copy(hostName = activeHost.getDisplayName(), error = null)
+                return@launch
+            }
+
             val host = getHostByIdUseCase(hostId)
             if (host == null) {
                 _effect.value = TerminalUiEffect.ShowConnectionError("Host not found")
@@ -180,9 +217,14 @@ class TerminalViewModel @Inject constructor(
         val host = currentHost ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            val success = startSessionUseCase(host) { algorithm, fingerprint ->
-                waitForHostKeyDecision(algorithm, fingerprint)
-            }
+            val success = startSessionUseCase(
+                hostProfile = host,
+                onHostKeyUnknown = { algorithm, fingerprint ->
+                    waitForHostKeyDecision(algorithm, fingerprint)
+                },
+                columns = _uiState.value.terminalColumns,
+                rows = _uiState.value.terminalRows
+            )
             _uiState.value = _uiState.value.copy(isLoading = false)
             if (!success) {
                 _effect.value = TerminalUiEffect.ShowConnectionError(

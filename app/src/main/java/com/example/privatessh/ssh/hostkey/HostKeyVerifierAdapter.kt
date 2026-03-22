@@ -44,6 +44,10 @@ class HostKeyVerifierAdapter @Inject constructor(
             return true
         }
 
+        if (existing != null && existing.fingerprint != fingerprint) {
+            return false
+        }
+
         if (allowOnlyKnownHosts) {
             return false
         }

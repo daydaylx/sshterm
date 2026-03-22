@@ -50,4 +50,8 @@ class ObserveSessionUseCase @Inject constructor(
     fun getCurrentError(): String? {
         return sessionEngine.error.value
     }
+
+    fun getCurrentHost(): HostProfile? {
+        return sessionEngine.currentHost.value
+    }
 }

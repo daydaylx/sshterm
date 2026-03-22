@@ -1,61 +1,121 @@
 package com.example.privatessh.service
 
+import com.example.privatessh.domain.model.AuthType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class ActiveSession(
+    val sessionId: String,
+    val hostId: String,
+    val hostName: String,
+    val authType: AuthType,
+    val reconnectAllowed: Boolean,
+    val passwordCached: Boolean,
+    val privateKeyAvailable: Boolean,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+enum class SessionLifecycleState {
+    IDLE,
+    CONNECTED,
+    DISCONNECTING,
+    GRACE,
+    RECONNECTING,
+    FAILED
+}
+
+data class SessionRuntimeState(
+    val lifecycleState: SessionLifecycleState = SessionLifecycleState.IDLE,
+    val activeSession: ActiveSession? = null,
+    val sessionCount: Int = 0,
+    val graceMinutesRemaining: Int = 0,
+    val statusMessage: String? = null
+) {
+    val canReconnect: Boolean
+        get() = activeSession?.reconnectAllowed == true
+}
+
 /**
- * Registry for managing active SSH terminal sessions.
- * Tracks session state across the application.
+ * Registry for the single active SSH session and its foreground-service lifecycle.
  */
 @Singleton
 class SessionRegistry @Inject constructor() {
 
-    private val _activeSessionId = MutableStateFlow<String?>(null)
-    val activeSessionId: StateFlow<String?> = _activeSessionId.asStateFlow()
+    private val _runtimeState = MutableStateFlow(SessionRuntimeState())
+    val runtimeState: StateFlow<SessionRuntimeState> = _runtimeState.asStateFlow()
 
-    private val _sessionCount = MutableStateFlow(0)
-    val sessionCount: StateFlow<Int> = _sessionCount.asStateFlow()
-
-    /**
-     * Registers a new active session.
-     */
-    fun registerSession(sessionId: String) {
-        _activeSessionId.value = sessionId
-        _sessionCount.value += 1
+    fun registerSession(session: ActiveSession) {
+        _runtimeState.value = SessionRuntimeState(
+            lifecycleState = SessionLifecycleState.CONNECTED,
+            activeSession = session,
+            sessionCount = 1,
+            graceMinutesRemaining = 0,
+            statusMessage = null
+        )
     }
 
-    /**
-     * Unregisters a session.
-     */
-    fun unregisterSession(sessionId: String) {
-        if (_activeSessionId.value == sessionId) {
-            _activeSessionId.value = null
-        }
-        _sessionCount.value = maxOf(0, _sessionCount.value - 1)
+    fun updateSession(session: ActiveSession) {
+        _runtimeState.value = _runtimeState.value.copy(
+            activeSession = session,
+            sessionCount = 1
+        )
     }
 
-    /**
-     * Returns true if a session is currently active.
-     */
-    fun hasActiveSession(): Boolean {
-        return _activeSessionId.value != null
+    fun markGracePeriod(minutesRemaining: Int) {
+        _runtimeState.value = _runtimeState.value.copy(
+            lifecycleState = SessionLifecycleState.GRACE,
+            sessionCount = if (_runtimeState.value.activeSession != null) 1 else 0,
+            graceMinutesRemaining = minutesRemaining,
+            statusMessage = "Session kept alive in background"
+        )
     }
 
-    /**
-     * Returns the current active session ID.
-     */
-    fun getActiveSessionId(): String? {
-        return _activeSessionId.value
+    fun markReconnecting(reason: String?) {
+        _runtimeState.value = _runtimeState.value.copy(
+            lifecycleState = SessionLifecycleState.RECONNECTING,
+            sessionCount = if (_runtimeState.value.activeSession != null) 1 else 0,
+            graceMinutesRemaining = 0,
+            statusMessage = reason
+        )
     }
 
-    /**
-     * Clears all sessions.
-     */
+    fun markDisconnecting() {
+        _runtimeState.value = _runtimeState.value.copy(
+            lifecycleState = SessionLifecycleState.DISCONNECTING,
+            sessionCount = if (_runtimeState.value.activeSession != null) 1 else 0,
+            graceMinutesRemaining = 0,
+            statusMessage = null
+        )
+    }
+
+    fun markFailed(reason: String?) {
+        _runtimeState.value = _runtimeState.value.copy(
+            lifecycleState = SessionLifecycleState.FAILED,
+            sessionCount = if (_runtimeState.value.activeSession != null) 1 else 0,
+            graceMinutesRemaining = 0,
+            statusMessage = reason
+        )
+    }
+
+    fun markConnected(statusMessage: String? = null) {
+        _runtimeState.value = _runtimeState.value.copy(
+            lifecycleState = SessionLifecycleState.CONNECTED,
+            sessionCount = if (_runtimeState.value.activeSession != null) 1 else 0,
+            graceMinutesRemaining = 0,
+            statusMessage = statusMessage
+        )
+    }
+
+    fun hasActiveSession(): Boolean = _runtimeState.value.activeSession != null
+
+    fun getActiveSession(): ActiveSession? = _runtimeState.value.activeSession
+
+    fun getActiveSessionId(): String? = _runtimeState.value.activeSession?.sessionId
+
     fun clearAll() {
-        _activeSessionId.value = null
-        _sessionCount.value = 0
+        _runtimeState.value = SessionRuntimeState()
     }
 }

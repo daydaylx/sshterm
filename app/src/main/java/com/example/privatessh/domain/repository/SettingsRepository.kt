@@ -19,6 +19,21 @@ interface SettingsRepository {
     fun observeTerminalMetrics(): Flow<TerminalMetrics>
 
     /**
+     * Observes whether battery optimization is disabled.
+     */
+    fun observeBatteryOptimizationDisabled(): Flow<Boolean>
+
+    /**
+     * Observes whether Tailscale target detection is enabled.
+     */
+    fun observeTailscaleHostTypeDetection(): Flow<Boolean>
+
+    /**
+     * Observes whether the screen should stay on during an active session.
+     */
+    fun observeKeepScreenOn(): Flow<Boolean>
+
+    /**
      * Sets the grace period duration in minutes.
      */
     suspend fun setGracePeriod(minutes: Int)

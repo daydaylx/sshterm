@@ -1,6 +1,7 @@
 package com.example.privatessh.presentation.terminal
 
 import com.example.privatessh.ssh.SshSessionState
+import com.example.privatessh.service.SessionLifecycleState
 import com.example.privatessh.terminal.input.ModifierKey
 import com.example.privatessh.terminal.input.ModifierState
 
@@ -9,12 +10,17 @@ import com.example.privatessh.terminal.input.ModifierState
  */
 data class TerminalUiState(
     val sessionState: SshSessionState = SshSessionState.DISCONNECTED,
+    val lifecycleState: SessionLifecycleState = SessionLifecycleState.IDLE,
     val hostName: String = "",
     val terminalOutput: String = "",
     val activeModifiers: Set<ModifierKey> = emptySet(),
     val modifierStates: Map<ModifierKey, ModifierState> = emptyMap(),
     val terminalColumns: Int = 80,
     val terminalRows: Int = 24,
+    val canReconnect: Boolean = false,
+    val graceMinutesRemaining: Int = 0,
+    val statusMessage: String? = null,
+    val keepScreenOn: Boolean = true,
     val error: String? = null,
     val isLoading: Boolean = false,
     val isAwaitingPassword: Boolean = false,
@@ -32,8 +38,13 @@ data class TerminalUiState(
     val isConnecting: Boolean
         get() = sessionState in setOf(
             SshSessionState.CONNECTING,
+            SshSessionState.RECONNECTING,
             SshSessionState.AUTHENTICATING
         )
+
+    val isReconnecting: Boolean
+        get() = lifecycleState == SessionLifecycleState.RECONNECTING ||
+            sessionState == SshSessionState.RECONNECTING
 
     /**
      * Returns true if there was an error.

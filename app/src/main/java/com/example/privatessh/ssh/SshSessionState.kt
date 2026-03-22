@@ -10,6 +10,9 @@ enum class SshSessionState {
     /** Establishing connection */
     CONNECTING,
 
+    /** Re-establishing a previous connection */
+    RECONNECTING,
+
     /** Authenticating */
     AUTHENTICATING,
 

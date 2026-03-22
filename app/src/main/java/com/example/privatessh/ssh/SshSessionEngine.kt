@@ -20,10 +20,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.schmizz.sshj.SSHClient
 import javax.inject.Inject
 import javax.inject.Singleton
+
+data class ReconnectCapability(
+    val isAllowed: Boolean,
+    val passwordCached: Boolean,
+    val privateKeyAvailable: Boolean,
+    val requiresPasswordPrompt: Boolean,
+    val reason: String? = null
+)
 
 /**
  * Singleton SSH session engine shared by UI and foreground service.
@@ -57,17 +66,32 @@ class SshSessionEngine @Inject constructor(
     private var outputJob: Job? = null
     private var errorJob: Job? = null
     private var sessionScope: CoroutineScope? = null
+    private var lastColumns: Int = 80
+    private var lastRows: Int = 24
+
+    @Volatile
+    private var disconnectRequested = false
+
+    @Volatile
+    private var closeHandled = false
 
     suspend fun connect(
         hostProfile: HostProfile,
         onHostKeyDecision: (algorithm: String, fingerprint: String) -> HostKeyDecision,
-        allowOnlyKnownHosts: Boolean = false
+        allowOnlyKnownHosts: Boolean = false,
+        columns: Int = lastColumns,
+        rows: Int = lastRows,
+        isReconnect: Boolean = false
     ): Boolean = withContext(Dispatchers.IO) {
         disconnect()
 
-        _state.value = SshSessionState.CONNECTING
+        disconnectRequested = false
+        closeHandled = false
+        _state.value = if (isReconnect) SshSessionState.RECONNECTING else SshSessionState.CONNECTING
         _error.value = null
         _currentHost.value = hostProfile
+        lastColumns = columns.coerceAtLeast(10)
+        lastRows = rows.coerceAtLeast(5)
 
         try {
             val client = sshClientFactory.createClient(hostProfile)
@@ -81,21 +105,22 @@ class SshSessionEngine @Inject constructor(
             _state.value = SshSessionState.AUTHENTICATING
             val authSuccess = authenticate(client, hostProfile)
             if (!authSuccess) {
-                _state.value = SshSessionState.ERROR
+                if (hostProfile.authType == AuthType.PASSWORD) {
+                    passwordAuthStrategy.clearPassword(hostProfile.id)
+                }
                 _error.value = "Authentication failed"
-                disconnect(preserveHost = true)
+                cleanupSession(preserveHost = true, finalState = SshSessionState.ERROR)
                 return@withContext false
             }
 
             val shellHandle = shellChannelAdapter.openShellChannel(
                 client = client,
                 terminalType = "xterm-256color",
-                columns = 80,
-                rows = 24
+                columns = lastColumns,
+                rows = lastRows
             ) ?: run {
-                _state.value = SshSessionState.ERROR
                 _error.value = "Failed to open interactive shell"
-                disconnect(preserveHost = true)
+                cleanupSession(preserveHost = true, finalState = SshSessionState.ERROR)
                 return@withContext false
             }
 
@@ -105,10 +130,14 @@ class SshSessionEngine @Inject constructor(
 
             outputJob = outputPump.start(
                 scope = sessionScope!!,
-                inputStream = shellHandle.shell.inputStream
-            ) { data ->
-                appendOutput(String(data, Charsets.UTF_8))
-            }
+                inputStream = shellHandle.shell.inputStream,
+                onOutput = { data ->
+                    appendOutput(String(data, Charsets.UTF_8))
+                },
+                onClosed = { reason ->
+                    handleUnexpectedClosure(reason)
+                }
+            )
             errorJob = errorPump.start(
                 scope = sessionScope!!,
                 errorStream = shellHandle.shell.errorStream
@@ -120,9 +149,8 @@ class SshSessionEngine @Inject constructor(
             _state.value = SshSessionState.CONNECTED
             true
         } catch (e: Exception) {
-            _state.value = SshSessionState.ERROR
             _error.value = SshErrorClassifier.classify(e).message
-            disconnect(preserveHost = true)
+            cleanupSession(preserveHost = true, finalState = SshSessionState.ERROR)
             false
         } finally {
             hostKeyVerifier.clear()
@@ -131,16 +159,110 @@ class SshSessionEngine @Inject constructor(
 
     suspend fun reconnectLast(): Boolean {
         val hostProfile = _currentHost.value ?: return false
+        val capability = canReconnect()
+        if (!capability.isAllowed) {
+            _error.value = capability.reason ?: "Reconnect is not available for this session."
+            _state.value = SshSessionState.ERROR
+            return false
+        }
+
         return connect(
             hostProfile = hostProfile,
-            onHostKeyDecision = { _, fingerprint -> HostKeyDecision.TrustOnce(fingerprint) },
-            allowOnlyKnownHosts = true
+            onHostKeyDecision = { _, _ -> HostKeyDecision.Reject },
+            allowOnlyKnownHosts = true,
+            columns = lastColumns,
+            rows = lastRows,
+            isReconnect = true
         )
     }
 
-    suspend fun disconnect(preserveHost: Boolean = false) {
-        _state.value = SshSessionState.DISCONNECTING
+    fun canReconnect(): ReconnectCapability {
+        val hostProfile = _currentHost.value ?: return ReconnectCapability(
+            isAllowed = false,
+            passwordCached = false,
+            privateKeyAvailable = false,
+            requiresPasswordPrompt = false,
+            reason = "No previous session is available."
+        )
 
+        return when (hostProfile.authType) {
+            AuthType.PASSWORD -> {
+                val passwordCached = passwordAuthStrategy.hasPassword(hostProfile.id)
+                ReconnectCapability(
+                    isAllowed = passwordCached,
+                    passwordCached = passwordCached,
+                    privateKeyAvailable = false,
+                    requiresPasswordPrompt = !passwordCached,
+                    reason = if (passwordCached) null else "Password is no longer available in memory."
+                )
+            }
+
+            AuthType.PRIVATE_KEY -> {
+                val privateKeyAvailable = privateKeyAuthStrategy.hasPrivateKey(hostProfile.id)
+                ReconnectCapability(
+                    isAllowed = privateKeyAvailable,
+                    passwordCached = false,
+                    privateKeyAvailable = privateKeyAvailable,
+                    requiresPasswordPrompt = false,
+                    reason = if (privateKeyAvailable) null else "Private key is not available for reconnect."
+                )
+            }
+        }
+    }
+
+    suspend fun disconnect(preserveHost: Boolean = false) {
+        disconnectRequested = true
+        closeHandled = true
+        _error.value = null
+
+        if (_state.value != SshSessionState.DISCONNECTED) {
+            _state.value = SshSessionState.DISCONNECTING
+        }
+
+        cleanupSession(preserveHost = preserveHost, finalState = SshSessionState.DISCONNECTED)
+    }
+
+    suspend fun sendInput(data: ByteArray) {
+        inputWriter.write(data)
+    }
+
+    suspend fun resizeTerminal(columns: Int, rows: Int) {
+        lastColumns = columns.coerceAtLeast(10)
+        lastRows = rows.coerceAtLeast(5)
+        currentShellHandle?.let { shellChannelAdapter.resizePty(it, lastColumns, lastRows) }
+    }
+
+    fun clearTerminalOutput() {
+        _terminalOutput.value = ""
+    }
+
+    fun clearSessionSecrets() {
+        _currentHost.value?.takeIf { it.authType == AuthType.PASSWORD }?.let { host ->
+            passwordAuthStrategy.clearPassword(host.id)
+        }
+    }
+
+    private fun appendOutput(text: String) {
+        _terminalOutput.update { current -> current + text }
+    }
+
+    private suspend fun authenticate(client: SSHClient, hostProfile: HostProfile): Boolean {
+        val authStrategy = when (hostProfile.authType) {
+            AuthType.PASSWORD -> passwordAuthStrategy
+            AuthType.PRIVATE_KEY -> privateKeyAuthStrategy
+        }
+
+        return try {
+            authStrategy.authenticate(client, SshSessionConfig(hostProfile)) != null
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private suspend fun cleanupSession(
+        preserveHost: Boolean,
+        finalState: SshSessionState
+    ) {
         sessionScope?.cancel()
         joinAll(*listOfNotNull(outputJob, errorJob).toTypedArray())
 
@@ -163,35 +285,17 @@ class SshSessionEngine @Inject constructor(
             _currentHost.value = null
         }
 
-        _state.value = SshSessionState.DISCONNECTED
+        _state.value = finalState
     }
 
-    suspend fun sendInput(data: ByteArray) {
-        inputWriter.write(data)
-    }
-
-    suspend fun resizeTerminal(columns: Int, rows: Int) {
-        currentShellHandle?.let { shellChannelAdapter.resizePty(it, columns, rows) }
-    }
-
-    fun clearTerminalOutput() {
-        _terminalOutput.value = ""
-    }
-
-    private fun appendOutput(text: String) {
-        _terminalOutput.update { current -> current + text }
-    }
-
-    private suspend fun authenticate(client: SSHClient, hostProfile: HostProfile): Boolean {
-        val authStrategy = when (hostProfile.authType) {
-            AuthType.PASSWORD -> passwordAuthStrategy
-            AuthType.PRIVATE_KEY -> privateKeyAuthStrategy
+    private fun handleUnexpectedClosure(reason: String?) {
+        if (disconnectRequested || closeHandled) {
+            return
         }
-
-        return try {
-            authStrategy.authenticate(client, SshSessionConfig(hostProfile)) != null
-        } catch (_: Exception) {
-            false
+        closeHandled = true
+        sessionScope?.launch {
+            _error.value = reason ?: "SSH session closed unexpectedly."
+            cleanupSession(preserveHost = true, finalState = SshSessionState.ERROR)
         }
     }
 }

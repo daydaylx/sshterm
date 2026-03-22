@@ -23,6 +23,15 @@ class SettingsRepositoryImpl @Inject constructor(
     override fun observeTerminalMetrics(): Flow<TerminalMetrics> =
         settingsDataStore.settings.map { it.toTerminalMetrics() }
 
+    override fun observeBatteryOptimizationDisabled(): Flow<Boolean> =
+        settingsDataStore.settings.map { it.batteryOptimizationDisabled }
+
+    override fun observeTailscaleHostTypeDetection(): Flow<Boolean> =
+        settingsDataStore.settings.map { it.tailscaleHostTypeDetection }
+
+    override fun observeKeepScreenOn(): Flow<Boolean> =
+        settingsDataStore.settings.map { it.keepScreenOn }
+
     override suspend fun setGracePeriod(minutes: Int) {
         settingsDataStore.setGracePeriod(minutes)
     }

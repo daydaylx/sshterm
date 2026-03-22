@@ -31,6 +31,21 @@ class SettingsViewModel @Inject constructor(
                 )
             }
         }
+        viewModelScope.launch {
+            getSettingsUseCase.observeBatteryOptimizationDisabled().collect { disabled ->
+                _uiState.value = _uiState.value.copy(batteryOptimizationDisabled = disabled)
+            }
+        }
+        viewModelScope.launch {
+            getSettingsUseCase.observeTailscaleHostTypeDetection().collect { enabled ->
+                _uiState.value = _uiState.value.copy(tailscaleHostTypeDetection = enabled)
+            }
+        }
+        viewModelScope.launch {
+            getSettingsUseCase.observeKeepScreenOn().collect { enabled ->
+                _uiState.value = _uiState.value.copy(keepScreenOn = enabled)
+            }
+        }
     }
 
     fun setGracePeriod(minutes: Int) {

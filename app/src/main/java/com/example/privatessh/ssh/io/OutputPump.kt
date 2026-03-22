@@ -21,25 +21,26 @@ class OutputPump @Inject constructor() {
     fun start(
         scope: CoroutineScope,
         inputStream: InputStream,
-        onOutput: (ByteArray) -> Unit
+        onOutput: (ByteArray) -> Unit,
+        onClosed: (String?) -> Unit = {}
     ): Job {
         return scope.launch(Dispatchers.IO + SupervisorJob()) {
             val buffer = ByteArray(8192)
-            var totalBytes = 0L
 
             try {
                 while (isActive) {
                     val read = inputStream.read(buffer)
-                    if (read < 0) break
+                    if (read < 0) {
+                        onClosed("SSH channel closed.")
+                        break
+                    }
 
                     val data = buffer.copyOf(read)
                     onOutput(data)
-                    totalBytes += read
                 }
             } catch (e: Exception) {
                 if (isActive) {
-                    // Only log if we weren't cancelled
-                    // TODO: Log output pump error
+                    onClosed(e.message ?: "SSH channel closed unexpectedly.")
                 }
             }
         }

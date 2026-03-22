@@ -3,6 +3,7 @@ package com.example.privatessh.ssh.auth
 import com.example.privatessh.domain.repository.SecureKeyRepository
 import com.example.privatessh.ssh.SshSessionConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,8 +43,9 @@ class PrivateKeyAuthStrategy @Inject constructor(
         secureKeyRepository.deleteKey(aliasForHost(hostId))
     }
 
-    suspend fun hasPrivateKey(hostId: String): Boolean =
+    fun hasPrivateKey(hostId: String): Boolean = runBlocking {
         secureKeyRepository.hasKey(aliasForHost(hostId))
+    }
 
     private fun aliasForHost(hostId: String): String = "host_$hostId"
 }

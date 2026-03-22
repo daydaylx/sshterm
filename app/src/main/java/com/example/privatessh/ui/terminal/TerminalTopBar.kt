@@ -19,11 +19,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.privatessh.ssh.SshSessionState
+import com.example.privatessh.service.SessionLifecycleState
 
 @Composable
 fun TerminalTopBar(
     hostName: String,
     sessionState: SshSessionState,
+    lifecycleState: SessionLifecycleState,
+    canReconnect: Boolean,
     onDisconnect: () -> Unit,
     onReconnect: () -> Unit,
     modifier: Modifier = Modifier
@@ -40,7 +43,7 @@ fun TerminalTopBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            StatusDot(color = statusColor(sessionState))
+            StatusDot(color = statusColor(sessionState, lifecycleState))
             Text(
                 text = hostName.ifBlank { "SSH session" },
                 style = MaterialTheme.typography.titleMedium
@@ -48,11 +51,14 @@ fun TerminalTopBar(
         }
 
         Row {
-            if (sessionState == SshSessionState.CONNECTED) {
+            if (sessionState == SshSessionState.CONNECTED || lifecycleState == SessionLifecycleState.GRACE) {
                 IconButton(onClick = onDisconnect) {
                     Icon(Icons.Default.Close, contentDescription = "Disconnect")
                 }
-            } else if (sessionState == SshSessionState.ERROR || sessionState == SshSessionState.DISCONNECTED) {
+            } else if (
+                lifecycleState != SessionLifecycleState.RECONNECTING &&
+                (canReconnect || sessionState == SshSessionState.ERROR || sessionState == SshSessionState.DISCONNECTED)
+            ) {
                 IconButton(onClick = onReconnect) {
                     Icon(Icons.Default.Refresh, contentDescription = "Reconnect")
                 }
@@ -71,11 +77,16 @@ private fun StatusDot(color: androidx.compose.ui.graphics.Color) {
 }
 
 @Composable
-private fun statusColor(state: SshSessionState) = when (state) {
-    SshSessionState.CONNECTED -> MaterialTheme.colorScheme.primary
-    SshSessionState.CONNECTING,
-    SshSessionState.AUTHENTICATING -> MaterialTheme.colorScheme.tertiary
-    SshSessionState.ERROR -> MaterialTheme.colorScheme.error
-    SshSessionState.DISCONNECTING,
-    SshSessionState.DISCONNECTED -> MaterialTheme.colorScheme.outline
+private fun statusColor(
+    state: SshSessionState,
+    lifecycleState: SessionLifecycleState
+) = when {
+    lifecycleState == SessionLifecycleState.GRACE -> MaterialTheme.colorScheme.secondary
+    lifecycleState == SessionLifecycleState.RECONNECTING -> MaterialTheme.colorScheme.tertiary
+    lifecycleState == SessionLifecycleState.FAILED -> MaterialTheme.colorScheme.error
+    state == SshSessionState.CONNECTED -> MaterialTheme.colorScheme.primary
+    state in setOf(SshSessionState.CONNECTING, SshSessionState.RECONNECTING, SshSessionState.AUTHENTICATING) ->
+        MaterialTheme.colorScheme.tertiary
+    state == SshSessionState.ERROR -> MaterialTheme.colorScheme.error
+    else -> MaterialTheme.colorScheme.outline
 }

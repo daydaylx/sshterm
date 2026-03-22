@@ -17,7 +17,6 @@ import javax.inject.Singleton
  */
 @Singleton
 class SessionGraceController @Inject constructor(
-    private val sessionRegistry: SessionRegistry
 ) {
 
     /**
@@ -44,6 +43,7 @@ class SessionGraceController @Inject constructor(
      * Starts the grace period countdown.
      */
     fun startGracePeriod(scope: CoroutineScope, onGraceExpired: () -> Unit) {
+        graceJob?.cancel()
         graceScope = scope
         var minutesRemaining = gracePeriodMinutes
         _state.value = GraceState.Active(minutesRemaining)

@@ -17,6 +17,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,15 +27,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.privatessh.presentation.terminal.TerminalUiEffect
 import com.example.privatessh.presentation.terminal.TerminalViewModel
-import com.example.privatessh.ssh.hostkey.HostKeyDecision
+import com.example.privatessh.service.SessionNotificationFactory
+import com.example.privatessh.service.SessionLifecycleState
+import com.example.privatessh.service.TerminalSessionService
 import com.example.privatessh.ui.dialogs.DisconnectDialog
 import com.example.privatessh.ui.dialogs.FingerprintDialog
-import com.example.privatessh.service.TerminalSessionService
 
 @Composable
 fun TerminalScreen(
@@ -47,6 +50,7 @@ fun TerminalScreen(
     val effect by viewModel.effect.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val view = LocalView.current
     var showDisconnectDialog by remember { mutableStateOf(false) }
     var password by rememberSaveable { mutableStateOf("") }
     var inputBuffer by rememberSaveable { mutableStateOf("") }
@@ -77,6 +81,14 @@ fun TerminalScreen(
                 context.stopService(Intent(context, TerminalSessionService::class.java))
             }
             else -> Unit
+        }
+    }
+
+    DisposableEffect(uiState.keepScreenOn, uiState.sessionState, uiState.lifecycleState) {
+        view.keepScreenOn = uiState.keepScreenOn &&
+            (uiState.isConnected || uiState.isReconnecting || uiState.lifecycleState == SessionLifecycleState.GRACE)
+        onDispose {
+            view.keepScreenOn = false
         }
     }
 
@@ -145,6 +157,8 @@ fun TerminalScreen(
             TerminalTopBar(
                 hostName = uiState.hostName,
                 sessionState = uiState.sessionState,
+                lifecycleState = uiState.lifecycleState,
+                canReconnect = uiState.canReconnect,
                 onDisconnect = { showDisconnectDialog = true },
                 onReconnect = { viewModel.connect(hostId) }
             )
@@ -169,7 +183,10 @@ fun TerminalScreen(
                 )
                 SessionStatusBar(
                     sessionState = uiState.sessionState,
-                    hostName = uiState.hostName
+                    lifecycleState = uiState.lifecycleState,
+                    hostName = uiState.hostName,
+                    graceMinutesRemaining = uiState.graceMinutesRemaining,
+                    statusMessage = uiState.statusMessage
                 )
             }
         },
@@ -187,6 +204,7 @@ fun TerminalScreen(
 
 private fun Context.startTerminalService(sessionId: String, hostName: String) {
     val intent = Intent(this, TerminalSessionService::class.java).apply {
+        action = SessionNotificationFactory.ACTION_START_SESSION
         putExtra("session_id", sessionId)
         putExtra("host_name", hostName)
     }
