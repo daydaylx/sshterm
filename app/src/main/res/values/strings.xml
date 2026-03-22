@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Private SSH</string>
+
+    <!-- Navigation -->
+    <string name="nav_host_list">Hosts</string>
+    <string name="nav_terminal">Terminal</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Host List -->
+    <string name="host_list_title">SSH Hosts</string>
+    <string name="host_list_add_host">Add Host</string>
+    <string name="host_list_empty">No hosts configured</string>
+    <string name="host_list_empty_hint">Add a host to get started</string>
+
+    <!-- Host Edit -->
+    <string name="host_edit_title_new">New Host</string>
+    <string name="host_edit_title_edit">Edit Host</string>
+    <string name="host_edit_name">Name</string>
+    <string name="host_edit_host">Hostname or IP</string>
+    <string name="host_edit_port">Port</string>
+    <string name="host_edit_user">Username</string>
+    <string name="host_edit_auth">Authentication</string>
+    <string name="host_edit_password">Password</string>
+    <string name="host_edit_private_key">Private Key</string>
+    <string name="host_edit_save">Save</string>
+    <string name="host_edit_cancel">Cancel</string>
+    <string name="host_edit_delete">Delete</string>
+
+    <!-- Terminal -->
+    <string name="terminal_title">Terminal</string>
+    <string name="terminal_connecting">Connecting…</string>
+    <string name="terminal_connected">Connected</string>
+    <string name="terminal_disconnected">Disconnected</string>
+    <string name="terminal_error">Connection error</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_name">SSH Sessions</string>
+    <string name="notification_channel_description">Active SSH terminal sessions</string>
+    <string name="notification_session_active">SSH Session: %s</string>
+    <string name="notification_action_return">Return to Session</string>
+    <string name="notification_action_disconnect">Disconnect</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_grace_period">Grace Period</string>
+    <string name="settings_grace_period_summary">Time to keep session after app is closed</string>
+    <string name="settings_battery_mode">Stability Mode</string>
+    <string name="settings_battery_mode_summary">Disable battery optimization for better background operation</string>
+    <string name="settings_terminal_font">Terminal Font Size</string>
+    <string name="settings_tmux_attach">Auto-attach tmux</string>
+    <string name="settings_tmux_attach_summary">Automatically attach to existing tmux session</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_delete_host_title">Delete Host?</string>
+    <string name="dialog_delete_host_message">Are you sure you want to delete \"%s\"?</string>
+    <string name="dialog_delete_host_confirm">Delete</string>
+    <string name="dialog_delete_host_cancel">Cancel</string>
+
+    <string name="dialog_fingerprint_title">Verify Host Key</string>
+    <string name="dialog_fingerprint_message">The fingerprint for host %1$s is:\n\n%2$s</string>
+    <string name="dialog_fingerprint_trust_once">Connect Once</string>
+    <string name="dialog_fingerprint_trust_always">Trust Always</string>
+    <string name="dialog_fingerprint_cancel">Cancel</string>
+</resources>
