@@ -50,6 +50,16 @@ class UpdateSettingsUseCase @Inject constructor(
         settingsRepository.setTerminalFontSize(size)
     }
 
+    /**
+     * Updates the terminal scrollback buffer size in lines.
+     */
+    suspend fun setScrollbackSize(lines: Int) {
+        require(lines in 100..10_000) {
+            "Scrollback size must be between 100 and 10000, got $lines"
+        }
+        settingsRepository.setScrollbackSize(lines)
+    }
+
     suspend fun setBatteryOptimizationDisabled(disabled: Boolean) {
         settingsRepository.setBatteryOptimizationDisabled(disabled)
     }
@@ -60,5 +70,9 @@ class UpdateSettingsUseCase @Inject constructor(
 
     suspend fun setKeepScreenOn(enabled: Boolean) {
         settingsRepository.setKeepScreenOn(enabled)
+    }
+
+    suspend fun setBiometricAuthEnabled(enabled: Boolean) {
+        settingsRepository.setBiometricAuthEnabled(enabled)
     }
 }

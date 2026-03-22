@@ -6,12 +6,14 @@ package com.example.privatessh.domain.model
 data class TerminalMetrics(
     val columns: Int = DEFAULT_COLUMNS,
     val rows: Int = DEFAULT_ROWS,
-    val fontSize: Float = DEFAULT_FONT_SIZE
+    val fontSize: Float = DEFAULT_FONT_SIZE,
+    val scrollbackSize: Int = DEFAULT_SCROLLBACK_SIZE
 ) {
     companion object {
         const val DEFAULT_COLUMNS = 80
         const val DEFAULT_ROWS = 24
         const val DEFAULT_FONT_SIZE = 14f
+        const val DEFAULT_SCROLLBACK_SIZE = 2000
     }
 
     /**

@@ -38,4 +38,9 @@ sealed class TerminalUiEffect {
      * Clear terminal output.
      */
     data object ClearTerminal : TerminalUiEffect()
+
+    /**
+     * Request biometric authentication before proceeding with the SSH connection.
+     */
+    data object RequestBiometricAuth : TerminalUiEffect()
 }

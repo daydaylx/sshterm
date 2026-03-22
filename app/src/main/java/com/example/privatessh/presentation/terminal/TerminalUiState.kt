@@ -24,6 +24,7 @@ data class TerminalUiState(
     val graceMinutesRemaining: Int = 0,
     val statusMessage: String? = null,
     val keepScreenOn: Boolean = true,
+    val biometricAuthEnabled: Boolean = false,
     val error: String? = null,
     val isLoading: Boolean = false,
     val isAwaitingPassword: Boolean = false,

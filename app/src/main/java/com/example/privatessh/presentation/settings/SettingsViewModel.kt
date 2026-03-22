@@ -28,6 +28,7 @@ class SettingsViewModel @Inject constructor(
                     tmuxAutoAttach = policy.tmuxAutoAttach,
                     tmuxSessionName = policy.tmuxSessionName.orEmpty(),
                     terminalFontSize = metrics.fontSize,
+                    terminalScrollbackSize = metrics.scrollbackSize,
                     isLoading = false
                 )
             }
@@ -45,6 +46,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             getSettingsUseCase.observeKeepScreenOn().collect { enabled ->
                 _uiState.value = _uiState.value.copy(keepScreenOn = enabled)
+            }
+        }
+        viewModelScope.launch {
+            getSettingsUseCase.observeBiometricAuthEnabled().collect { enabled ->
+                _uiState.value = _uiState.value.copy(biometricAuthEnabled = enabled)
             }
         }
     }
@@ -86,6 +92,13 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setScrollbackSize(lines: Int) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(terminalScrollbackSize = lines)
+            updateSettingsUseCase.setScrollbackSize(lines)
+        }
+    }
+
     fun toggleBatteryOptimization() {
         viewModelScope.launch {
             val value = !_uiState.value.batteryOptimizationDisabled
@@ -107,6 +120,14 @@ class SettingsViewModel @Inject constructor(
             val value = !_uiState.value.keepScreenOn
             _uiState.value = _uiState.value.copy(keepScreenOn = value)
             updateSettingsUseCase.setKeepScreenOn(value)
+        }
+    }
+
+    fun toggleBiometricAuth() {
+        viewModelScope.launch {
+            val value = !_uiState.value.biometricAuthEnabled
+            _uiState.value = _uiState.value.copy(biometricAuthEnabled = value)
+            updateSettingsUseCase.setBiometricAuthEnabled(value)
         }
     }
 }

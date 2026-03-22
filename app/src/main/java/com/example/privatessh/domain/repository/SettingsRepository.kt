@@ -34,6 +34,11 @@ interface SettingsRepository {
     fun observeKeepScreenOn(): Flow<Boolean>
 
     /**
+     * Observes whether biometric authentication is required before connecting.
+     */
+    fun observeBiometricAuthEnabled(): Flow<Boolean>
+
+    /**
      * Sets the grace period duration in minutes.
      */
     suspend fun setGracePeriod(minutes: Int)
@@ -59,6 +64,11 @@ interface SettingsRepository {
     suspend fun setTerminalFontSize(size: Float)
 
     /**
+     * Sets the terminal scrollback buffer size in lines.
+     */
+    suspend fun setScrollbackSize(lines: Int)
+
+    /**
      * Sets whether battery optimization is disabled.
      */
     suspend fun setBatteryOptimizationDisabled(disabled: Boolean)
@@ -72,6 +82,11 @@ interface SettingsRepository {
      * Sets whether the screen should stay on during active sessions.
      */
     suspend fun setKeepScreenOn(enabled: Boolean)
+
+    /**
+     * Sets whether biometric authentication is required before connecting.
+     */
+    suspend fun setBiometricAuthEnabled(enabled: Boolean)
 
     /**
      * Gets the current session policy.

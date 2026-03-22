@@ -3,6 +3,7 @@ package com.example.privatessh.ui.terminal
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.privatessh.presentation.terminal.TerminalUiEffect
 import com.example.privatessh.presentation.terminal.TerminalViewModel
+import com.example.privatessh.service.security.BiometricGate
 import com.example.privatessh.service.SessionNotificationFactory
 import com.example.privatessh.service.SessionLifecycleState
 import com.example.privatessh.service.TerminalSessionService
@@ -68,6 +70,15 @@ fun TerminalScreen(
                 is TerminalUiEffect.ShowToast -> snackbarHostState.showSnackbar(current.message)
                 TerminalUiEffect.NavigateBack -> onNavigateBack()
                 TerminalUiEffect.ShowDisconnectDialog -> showDisconnectDialog = true
+                TerminalUiEffect.RequestBiometricAuth -> {
+                    val activity = context as? AppCompatActivity
+                    if (activity != null) {
+                        val granted = BiometricGate.authenticate(activity, "SSH-Verbindung")
+                        viewModel.onBiometricAuthResult(granted)
+                    } else {
+                        viewModel.onBiometricAuthResult(false)
+                    }
+                }
                 else -> Unit
             }
         }

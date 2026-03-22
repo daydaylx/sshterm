@@ -61,6 +61,8 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
     implementation("androidx.activity:activity-compose:1.9.0")
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.biometric:biometric:1.1.0")
 
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.05.00"))

@@ -12,9 +12,11 @@ data class SettingsUiState(
     val tmuxAutoAttach: Boolean = false,
     val tmuxSessionName: String = "",
     val terminalFontSize: Float = 14f,
+    val terminalScrollbackSize: Int = 2000,
     val batteryOptimizationDisabled: Boolean = false,
     val tailscaleHostTypeDetection: Boolean = true,
     val keepScreenOn: Boolean = true,
+    val biometricAuthEnabled: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null
 ) {

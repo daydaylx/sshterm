@@ -18,12 +18,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -203,15 +205,40 @@ fun HostEditScreen(
             )
 
             if (authType == AuthType.PRIVATE_KEY) {
-                OutlinedTextField(
-                    value = privateKeyPem,
-                    onValueChange = { privateKeyPem = it },
-                    label = { Text("Private key (PEM)") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    minLines = 8
-                )
+                if (uiState.hasStoredPrivateKey && privateKeyPem.isBlank()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Key gespeichert \u2713",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        TextButton(
+                            onClick = viewModel::onClearPrivateKey,
+                            enabled = !uiState.isBusy
+                        ) {
+                            Text("Key löschen")
+                        }
+                    }
+                }
+                if (!uiState.hasStoredPrivateKey || privateKeyPem.isNotBlank()) {
+                    OutlinedTextField(
+                        value = privateKeyPem,
+                        onValueChange = { privateKeyPem = it },
+                        label = {
+                            Text(if (uiState.hasStoredPrivateKey) "Neuen Key eingeben (PEM)" else "Private key (PEM)")
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        minLines = 8
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

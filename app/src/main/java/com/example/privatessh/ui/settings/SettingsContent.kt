@@ -62,9 +62,11 @@ fun SettingsScreen(
             onTmuxAutoAttachToggle = viewModel::toggleTmuxAutoAttach,
             onTmuxSessionNameChange = viewModel::setTmuxSessionName,
             onFontSizeChange = viewModel::setTerminalFontSize,
+            onScrollbackSizeChange = viewModel::setScrollbackSize,
             onBatteryOptimizationToggle = viewModel::toggleBatteryOptimization,
             onTailscaleDetectionToggle = viewModel::toggleTailscaleDetection,
             onKeepScreenOnToggle = viewModel::toggleKeepScreenOn,
+            onBiometricAuthToggle = viewModel::toggleBiometricAuth,
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
@@ -81,9 +83,11 @@ fun SettingsContent(
     onTmuxAutoAttachToggle: () -> Unit,
     onTmuxSessionNameChange: (String) -> Unit,
     onFontSizeChange: (Float) -> Unit,
+    onScrollbackSizeChange: (Int) -> Unit,
     onBatteryOptimizationToggle: () -> Unit,
     onTailscaleDetectionToggle: () -> Unit,
     onKeepScreenOnToggle: () -> Unit,
+    onBiometricAuthToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     androidx.compose.foundation.layout.Column(modifier = modifier) {
@@ -129,6 +133,13 @@ fun SettingsContent(
                 valueRange = 10..24,
                 onValueChange = { onFontSizeChange(it.toFloat()) }
             )
+            SettingsSliderItem(
+                title = "Scrollback buffer",
+                description = "Lines of terminal history to keep (takes effect on next connect)",
+                value = uiState.terminalScrollbackSize,
+                valueRange = 100..5000,
+                onValueChange = onScrollbackSizeChange
+            )
             SettingsSwitchItem(
                 title = "Keep screen on",
                 description = "Prevent the screen from sleeping during active sessions",
@@ -144,6 +155,16 @@ fun SettingsContent(
                 description = "Show tailored hints for Tailnet targets",
                 checked = uiState.tailscaleHostTypeDetection,
                 onCheckedChange = { onTailscaleDetectionToggle() }
+            )
+        }
+
+        SettingsSectionHeader("Security")
+        SettingsCard(title = "Authentication") {
+            SettingsSwitchItem(
+                title = "Biometric authentication",
+                description = "Require biometric confirmation before opening an SSH connection",
+                checked = uiState.biometricAuthEnabled,
+                onCheckedChange = { onBiometricAuthToggle() }
             )
         }
 

@@ -81,6 +81,7 @@ class SshSessionEngine @Inject constructor(
     private var lastColumns: Int = 80
     private var lastRows: Int = 24
     private var lastSessionPolicy: SessionPolicy = SessionPolicy()
+    private var lastScrollbackLimit: Int = 2000
     private var tmuxMarkerCarry = ByteArray(0)
 
     private val disconnectRequested = AtomicBoolean(false)
@@ -93,7 +94,8 @@ class SshSessionEngine @Inject constructor(
         columns: Int = lastColumns,
         rows: Int = lastRows,
         isReconnect: Boolean = false,
-        sessionPolicy: SessionPolicy = lastSessionPolicy
+        sessionPolicy: SessionPolicy = lastSessionPolicy,
+        scrollbackLimit: Int = lastScrollbackLimit
     ): Boolean = withContext(Dispatchers.IO) {
         disconnect()
 
@@ -105,6 +107,8 @@ class SshSessionEngine @Inject constructor(
         lastColumns = columns.coerceAtLeast(10)
         lastRows = rows.coerceAtLeast(5)
         lastSessionPolicy = sessionPolicy
+        lastScrollbackLimit = scrollbackLimit.coerceAtLeast(100)
+        synchronized(terminalLock) { terminalEmulator.setScrollbackLimit(lastScrollbackLimit) }
         resetTerminalState()
         resetShellStatus()
 

@@ -6,7 +6,7 @@ package com.example.privatessh.terminal
 class TerminalBuffer(
     initialColumns: Int = 80,
     initialRows: Int = 24,
-    private val scrollbackLimit: Int = 2000
+    private var scrollbackLimit: Int = 2000
 ) {
     var columns: Int = initialColumns
         private set
@@ -22,6 +22,10 @@ class TerminalBuffer(
 
     private var state = TerminalState(scrollBottom = screenRows - 1)
     private var isAlternateScreen = false
+
+    fun setScrollbackLimit(limit: Int) {
+        scrollbackLimit = limit.coerceAtLeast(100)
+    }
 
     fun reset(columns: Int = this.columns, rows: Int = screenRows) {
         this.columns = columns.coerceAtLeast(10)

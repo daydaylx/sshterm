@@ -32,9 +32,11 @@ class SettingsDataStore @Inject constructor(
         val TERMINAL_FONT_SIZE = floatPreferencesKey("terminal_font_size")
         val TERMINAL_COLUMNS = intPreferencesKey("terminal_columns")
         val TERMINAL_ROWS = intPreferencesKey("terminal_rows")
+        val TERMINAL_SCROLLBACK_SIZE = intPreferencesKey("terminal_scrollback_size")
         val BATTERY_OPTIMIZATION_DISABLED = booleanPreferencesKey("battery_optimization_disabled")
         val TAILSCALE_HOST_TYPE_DETECTION = booleanPreferencesKey("tailscale_host_type_detection")
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
+        val BIOMETRIC_AUTH_ENABLED = booleanPreferencesKey("biometric_auth_enabled")
     }
 
     /**
@@ -49,11 +51,13 @@ class SettingsDataStore @Inject constructor(
             terminalFontSize = preferences[Keys.TERMINAL_FONT_SIZE] ?: AppSettings.DEFAULT_FONT_SIZE,
             terminalColumns = preferences[Keys.TERMINAL_COLUMNS] ?: AppSettings.DEFAULT_COLUMNS,
             terminalRows = preferences[Keys.TERMINAL_ROWS] ?: AppSettings.DEFAULT_ROWS,
+            terminalScrollbackSize = preferences[Keys.TERMINAL_SCROLLBACK_SIZE] ?: AppSettings.DEFAULT_SCROLLBACK_SIZE,
             batteryOptimizationDisabled = preferences[Keys.BATTERY_OPTIMIZATION_DISABLED]
                 ?: AppSettings.DEFAULT_BATTERY_OPTIMIZATION_DISABLED,
             tailscaleHostTypeDetection = preferences[Keys.TAILSCALE_HOST_TYPE_DETECTION]
                 ?: AppSettings.DEFAULT_TAILSCALE_HOST_TYPE_DETECTION,
-            keepScreenOn = preferences[Keys.KEEP_SCREEN_ON] ?: AppSettings.DEFAULT_KEEP_SCREEN_ON
+            keepScreenOn = preferences[Keys.KEEP_SCREEN_ON] ?: AppSettings.DEFAULT_KEEP_SCREEN_ON,
+            biometricAuthEnabled = preferences[Keys.BIOMETRIC_AUTH_ENABLED] ?: AppSettings.DEFAULT_BIOMETRIC_AUTH_ENABLED
         )
     }
 
@@ -124,6 +128,15 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
+    /**
+     * Sets the terminal scrollback buffer size in lines.
+     */
+    suspend fun setScrollbackSize(lines: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[Keys.TERMINAL_SCROLLBACK_SIZE] = lines
+        }
+    }
+
     suspend fun setBatteryOptimizationDisabled(disabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[Keys.BATTERY_OPTIMIZATION_DISABLED] = disabled
@@ -139,6 +152,12 @@ class SettingsDataStore @Inject constructor(
     suspend fun setKeepScreenOn(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[Keys.KEEP_SCREEN_ON] = enabled
+        }
+    }
+
+    suspend fun setBiometricAuthEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[Keys.BIOMETRIC_AUTH_ENABLED] = enabled
         }
     }
 }

@@ -24,6 +24,7 @@ import com.example.privatessh.terminal.input.SpecialKey
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
+import timber.log.Timber
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -52,6 +53,7 @@ class TerminalViewModel @Inject constructor(
 
     @Volatile private var currentHost: HostProfile? = null
     @Volatile private var pendingHostKeyDecision: CompletableDeferred<HostKeyDecision>? = null
+    @Volatile private var pendingBiometricAuth: CompletableDeferred<Boolean>? = null
 
     init {
         viewModelScope.launch {
@@ -112,6 +114,11 @@ class TerminalViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(terminalFontSizeSp = metrics.fontSize)
             }
         }
+        viewModelScope.launch {
+            getSettingsUseCase.observeBiometricAuthEnabled().collect { enabled ->
+                _uiState.value = _uiState.value.copy(biometricAuthEnabled = enabled)
+            }
+        }
         updateModifierStates()
     }
 
@@ -141,6 +148,14 @@ class TerminalViewModel @Inject constructor(
 
             currentHost = host
             _uiState.value = _uiState.value.copy(hostName = host.getDisplayName(), error = null)
+
+            if (_uiState.value.biometricAuthEnabled) {
+                val granted = waitForBiometricAuth()
+                if (!granted) {
+                    _effect.trySend(TerminalUiEffect.ShowConnectionError("Biometric authentication denied"))
+                    return@launch
+                }
+            }
 
             when (host.authType) {
                 AuthType.PASSWORD -> {
@@ -298,6 +313,23 @@ class TerminalViewModel @Inject constructor(
                     observeSessionUseCase.getCurrentError() ?: "Connection failed"
                 ))
             }
+        }
+    }
+
+    fun onBiometricAuthResult(success: Boolean) {
+        pendingBiometricAuth?.complete(success)
+        pendingBiometricAuth = null
+    }
+
+    private suspend fun waitForBiometricAuth(): Boolean {
+        val deferred = CompletableDeferred<Boolean>()
+        pendingBiometricAuth = deferred
+        _effect.trySend(TerminalUiEffect.RequestBiometricAuth)
+        return try {
+            deferred.await()
+        } catch (e: Exception) {
+            Timber.w(e, "Biometric auth wait cancelled")
+            false
         }
     }
 

@@ -15,7 +15,8 @@ data class HostEditUiState(
     val validationErrors: Map<String, String> = emptyMap(),
     val generalError: String? = null,
     val didSave: Boolean = false,
-    val didDelete: Boolean = false
+    val didDelete: Boolean = false,
+    val hasStoredPrivateKey: Boolean = false
 ) {
     /**
      * Returns true if the form is currently being saved.

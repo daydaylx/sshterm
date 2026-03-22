@@ -29,12 +29,14 @@ class StartSessionUseCase @Inject constructor(
     ): Boolean = withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
             val sessionPolicy = settingsRepository.getSessionPolicy()
+            val terminalMetrics = settingsRepository.getTerminalMetrics()
             sessionEngine.connect(
                 hostProfile = hostProfile,
                 onHostKeyDecision = onHostKeyUnknown,
                 columns = columns,
                 rows = rows,
-                sessionPolicy = sessionPolicy
+                sessionPolicy = sessionPolicy,
+                scrollbackLimit = terminalMetrics.scrollbackSize
             )
         } catch (e: Exception) {
             false

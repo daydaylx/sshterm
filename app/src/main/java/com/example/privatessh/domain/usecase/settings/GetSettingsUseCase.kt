@@ -42,4 +42,7 @@ class GetSettingsUseCase @Inject constructor(
 
     fun observeKeepScreenOn(): Flow<Boolean> =
         settingsRepository.observeKeepScreenOn()
+
+    fun observeBiometricAuthEnabled(): Flow<Boolean> =
+        settingsRepository.observeBiometricAuthEnabled()
 }

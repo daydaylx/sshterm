@@ -2,6 +2,7 @@ package com.example.privatessh
 
 import android.app.Application
 import com.example.privatessh.BuildConfig
+import com.example.privatessh.diagnostics.CryptoProviderProbe
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
 
@@ -18,5 +19,6 @@ class App : Application() {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
+        CryptoProviderProbe.probeAndLog()
     }
 }

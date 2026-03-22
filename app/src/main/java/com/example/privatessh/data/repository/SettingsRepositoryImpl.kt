@@ -32,6 +32,9 @@ class SettingsRepositoryImpl @Inject constructor(
     override fun observeKeepScreenOn(): Flow<Boolean> =
         settingsDataStore.settings.map { it.keepScreenOn }
 
+    override fun observeBiometricAuthEnabled(): Flow<Boolean> =
+        settingsDataStore.settings.map { it.biometricAuthEnabled }
+
     override suspend fun setGracePeriod(minutes: Int) {
         settingsDataStore.setGracePeriod(minutes)
     }
@@ -52,6 +55,10 @@ class SettingsRepositoryImpl @Inject constructor(
         settingsDataStore.setTerminalFontSize(size)
     }
 
+    override suspend fun setScrollbackSize(lines: Int) {
+        settingsDataStore.setScrollbackSize(lines)
+    }
+
     override suspend fun setBatteryOptimizationDisabled(disabled: Boolean) {
         settingsDataStore.setBatteryOptimizationDisabled(disabled)
     }
@@ -62,6 +69,10 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setKeepScreenOn(enabled: Boolean) {
         settingsDataStore.setKeepScreenOn(enabled)
+    }
+
+    override suspend fun setBiometricAuthEnabled(enabled: Boolean) {
+        settingsDataStore.setBiometricAuthEnabled(enabled)
     }
 
     override suspend fun getSessionPolicy(): SessionPolicy =

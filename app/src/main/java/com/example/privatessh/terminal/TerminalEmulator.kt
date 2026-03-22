@@ -5,11 +5,12 @@ package com.example.privatessh.terminal
  */
 class TerminalEmulator(
     columns: Int = 80,
-    rows: Int = 24
+    rows: Int = 24,
+    scrollbackLimit: Int = 2000
 ) {
     private val parser = TerminalOutputParser()
     private val interpreter = AnsiSequenceInterpreter()
-    private val buffer = TerminalBuffer(initialColumns = columns, initialRows = rows)
+    private val buffer = TerminalBuffer(initialColumns = columns, initialRows = rows, scrollbackLimit = scrollbackLimit)
 
     fun feed(bytes: ByteArray): TerminalRendererState {
         return try {
@@ -30,6 +31,10 @@ class TerminalEmulator(
         parser.reset()
         buffer.reset(columns, rows)
         return buffer.snapshot()
+    }
+
+    fun setScrollbackLimit(limit: Int) {
+        buffer.setScrollbackLimit(limit)
     }
 
     fun snapshot(): TerminalRendererState = buffer.snapshot()

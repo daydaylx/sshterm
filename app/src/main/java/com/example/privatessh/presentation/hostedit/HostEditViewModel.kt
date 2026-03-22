@@ -80,14 +80,17 @@ class HostEditViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isSaving = true, didSave = false)
             try {
                 saveHostUseCase(profile)
-                if (authType == AuthType.PRIVATE_KEY && privateKeyPem.isNotBlank()) {
+                val keyStored = if (authType == AuthType.PRIVATE_KEY && privateKeyPem.isNotBlank()) {
                     privateKeyAuthStrategy.storePrivateKey(profile.id, privateKeyPem.trim())
+                } else {
+                    _uiState.value.hasStoredPrivateKey
                 }
                 _uiState.value = _uiState.value.copy(
                     isSaving = false,
                     hostProfile = profile,
                     validationErrors = emptyMap(),
-                    didSave = true
+                    didSave = true,
+                    hasStoredPrivateKey = keyStored
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -119,13 +122,26 @@ class HostEditViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(generalError = null)
     }
 
+    fun onClearPrivateKey() {
+        val currentHostId = _uiState.value.hostProfile?.id ?: return
+        viewModelScope.launch {
+            privateKeyAuthStrategy.clearPrivateKey(currentHostId)
+            _uiState.value = _uiState.value.copy(hasStoredPrivateKey = false)
+        }
+    }
+
     private fun loadHost(id: String) {
         viewModelScope.launch {
             val host = getHostByIdUseCase(id)
-            _uiState.value = if (host != null) {
-                HostEditUiState(isNewHost = false, hostProfile = host)
+            if (host != null) {
+                val hasKey = privateKeyAuthStrategy.hasPrivateKey(host.id)
+                _uiState.value = HostEditUiState(
+                    isNewHost = false,
+                    hostProfile = host,
+                    hasStoredPrivateKey = hasKey
+                )
             } else {
-                HostEditUiState(isNewHost = false, generalError = "Host not found")
+                _uiState.value = HostEditUiState(isNewHost = false, generalError = "Host not found")
             }
         }
     }

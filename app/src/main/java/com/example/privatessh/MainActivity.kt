@@ -2,7 +2,7 @@ package com.example.privatessh
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,7 +21,7 @@ import dagger.hilt.android.AndroidEntryPoint
  * Main activity for the Private SSH application.
  */
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     private val pendingTerminalRoute = mutableStateOf<String?>(null)
 
