@@ -18,12 +18,12 @@ class HostKeyVerifierAdapter @Inject constructor(
     private val knownHostRepository: KnownHostRepository
 ) : HostKeyVerifier {
 
-    private var decisionProvider: ((algorithm: String, fingerprint: String) -> HostKeyDecision)? = null
-    private var allowOnlyKnownHosts: Boolean = false
+    @Volatile private var decisionProvider: (suspend (String, String) -> HostKeyDecision)? = null
+    @Volatile private var allowOnlyKnownHosts: Boolean = false
 
     fun prepare(
         allowOnlyKnownHosts: Boolean = false,
-        decisionProvider: ((algorithm: String, fingerprint: String) -> HostKeyDecision)? = null
+        decisionProvider: (suspend (String, String) -> HostKeyDecision)? = null
     ) {
         this.allowOnlyKnownHosts = allowOnlyKnownHosts
         this.decisionProvider = decisionProvider
@@ -38,7 +38,9 @@ class HostKeyVerifierAdapter @Inject constructor(
         val host = "$hostname:$port"
         val algorithm = key.algorithm ?: "unknown"
         val fingerprint = formatFingerprint(key)
-        val existing = runBlocking { knownHostRepository.getKnownHost(host) }
+        val existing = try {
+            runBlocking { knownHostRepository.getKnownHost(host) }
+        } catch (_: Exception) { null }
 
         if (existing != null && existing.fingerprint == fingerprint) {
             return true
@@ -52,14 +54,20 @@ class HostKeyVerifierAdapter @Inject constructor(
             return false
         }
 
-        val decision = decisionProvider?.invoke(algorithm, fingerprint) ?: HostKeyDecision.Reject
+        val decision = try {
+            decisionProvider?.let { provider -> runBlocking { provider(algorithm, fingerprint) } }
+                ?: HostKeyDecision.Reject
+        } catch (_: Exception) { HostKeyDecision.Reject }
+
         return when (decision) {
             is HostKeyDecision.TrustAlways -> {
-                runBlocking {
-                    knownHostRepository.addKnownHost(
-                        KnownHostEntry(host = host, algorithm = algorithm, fingerprint = fingerprint)
-                    )
-                }
+                try {
+                    runBlocking {
+                        knownHostRepository.addKnownHost(
+                            KnownHostEntry(host = host, algorithm = algorithm, fingerprint = fingerprint)
+                        )
+                    }
+                } catch (_: Exception) { }
                 true
             }
             is HostKeyDecision.TrustOnce -> true

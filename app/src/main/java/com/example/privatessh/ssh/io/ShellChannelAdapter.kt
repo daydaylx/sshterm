@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.connection.channel.direct.Session
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,19 +38,22 @@ class ShellChannelAdapter @Inject constructor() {
     suspend fun closeChannel(handle: ShellHandle) = withContext(Dispatchers.IO) {
         try {
             handle.shell.close()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Timber.w(e, "Shell close error (non-critical)")
         }
 
         try {
             handle.session.close()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Timber.w(e, "Session close error (non-critical)")
         }
     }
 
     suspend fun resizePty(handle: ShellHandle, columns: Int, rows: Int) = withContext(Dispatchers.IO) {
         try {
             handle.shell.changeWindowDimensions(columns, rows, 0, 0)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Timber.w(e, "PTY resize failed")
         }
     }
 }

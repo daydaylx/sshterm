@@ -3,6 +3,7 @@ package com.example.privatessh.domain.usecase.session
 import com.example.privatessh.ssh.SshSessionEngine
 import dagger.hilt.android.scopes.ViewModelScoped
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -17,7 +18,7 @@ class StopSessionUseCase @Inject constructor(
         try {
             sessionEngine.disconnect()
         } catch (e: Exception) {
-            // Ignore disconnect errors
+            Timber.w(e, "Disconnect error (non-critical)")
         }
     }
 }

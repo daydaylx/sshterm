@@ -3,7 +3,6 @@ package com.example.privatessh.ssh.io
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.InputStream
@@ -24,7 +23,7 @@ class OutputPump @Inject constructor() {
         onOutput: (ByteArray) -> Unit,
         onClosed: (String?) -> Unit = {}
     ): Job {
-        return scope.launch(Dispatchers.IO + SupervisorJob()) {
+        return scope.launch(Dispatchers.IO) {
             val buffer = ByteArray(8192)
 
             try {

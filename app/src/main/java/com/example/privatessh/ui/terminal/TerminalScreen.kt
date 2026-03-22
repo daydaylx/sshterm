@@ -49,7 +49,6 @@ fun TerminalScreen(
     viewModel: TerminalViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val effect by viewModel.effect.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -62,16 +61,15 @@ fun TerminalScreen(
         viewModel.connect(hostId)
     }
 
-    LaunchedEffect(effect) {
-        when (val current = effect) {
-            is TerminalUiEffect.ShowConnectionError -> snackbarHostState.showSnackbar(current.message)
-            is TerminalUiEffect.ShowToast -> snackbarHostState.showSnackbar(current.message)
-            TerminalUiEffect.NavigateBack -> onNavigateBack()
-            TerminalUiEffect.ShowDisconnectDialog -> showDisconnectDialog = true
-            else -> Unit
-        }
-        if (effect != null) {
-            viewModel.clearEffect()
+    LaunchedEffect(Unit) {
+        viewModel.effect.collect { current ->
+            when (current) {
+                is TerminalUiEffect.ShowConnectionError -> snackbarHostState.showSnackbar(current.message)
+                is TerminalUiEffect.ShowToast -> snackbarHostState.showSnackbar(current.message)
+                TerminalUiEffect.NavigateBack -> onNavigateBack()
+                TerminalUiEffect.ShowDisconnectDialog -> showDisconnectDialog = true
+                else -> Unit
+            }
         }
     }
 
@@ -105,11 +103,11 @@ fun TerminalScreen(
         )
     }
 
-    if (uiState.hostKeyPrompt != null) {
+    uiState.hostKeyPrompt?.let { prompt ->
         FingerprintDialog(
             hostName = uiState.hostName.ifBlank { "SSH host" },
-            algorithm = uiState.hostKeyPrompt!!.algorithm,
-            fingerprint = uiState.hostKeyPrompt!!.fingerprint,
+            algorithm = prompt.algorithm,
+            fingerprint = prompt.fingerprint,
             onDecision = viewModel::onHostKeyDecision
         )
     }

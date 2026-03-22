@@ -5,6 +5,7 @@ import com.example.privatessh.ssh.SessionShellMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -61,56 +62,56 @@ class SessionRegistry @Inject constructor() {
     }
 
     fun updateSession(session: ActiveSession) {
-        _runtimeState.value = _runtimeState.value.copy(
+        _runtimeState.update { it.copy(
             activeSession = session,
             sessionCount = 1,
             statusMessage = session.shellStatus
-        )
+        ) }
     }
 
     fun markGracePeriod(minutesRemaining: Int) {
-        _runtimeState.value = _runtimeState.value.copy(
+        _runtimeState.update { it.copy(
             lifecycleState = SessionLifecycleState.GRACE,
-            sessionCount = if (_runtimeState.value.activeSession != null) 1 else 0,
+            sessionCount = if (it.activeSession != null) 1 else 0,
             graceMinutesRemaining = minutesRemaining,
             statusMessage = "Session kept alive in background"
-        )
+        ) }
     }
 
     fun markReconnecting(reason: String?) {
-        _runtimeState.value = _runtimeState.value.copy(
+        _runtimeState.update { it.copy(
             lifecycleState = SessionLifecycleState.RECONNECTING,
-            sessionCount = if (_runtimeState.value.activeSession != null) 1 else 0,
+            sessionCount = if (it.activeSession != null) 1 else 0,
             graceMinutesRemaining = 0,
             statusMessage = reason
-        )
+        ) }
     }
 
     fun markDisconnecting() {
-        _runtimeState.value = _runtimeState.value.copy(
+        _runtimeState.update { it.copy(
             lifecycleState = SessionLifecycleState.DISCONNECTING,
-            sessionCount = if (_runtimeState.value.activeSession != null) 1 else 0,
+            sessionCount = if (it.activeSession != null) 1 else 0,
             graceMinutesRemaining = 0,
             statusMessage = null
-        )
+        ) }
     }
 
     fun markFailed(reason: String?) {
-        _runtimeState.value = _runtimeState.value.copy(
+        _runtimeState.update { it.copy(
             lifecycleState = SessionLifecycleState.FAILED,
-            sessionCount = if (_runtimeState.value.activeSession != null) 1 else 0,
+            sessionCount = if (it.activeSession != null) 1 else 0,
             graceMinutesRemaining = 0,
             statusMessage = reason
-        )
+        ) }
     }
 
     fun markConnected(statusMessage: String? = null) {
-        _runtimeState.value = _runtimeState.value.copy(
+        _runtimeState.update { it.copy(
             lifecycleState = SessionLifecycleState.CONNECTED,
-            sessionCount = if (_runtimeState.value.activeSession != null) 1 else 0,
+            sessionCount = if (it.activeSession != null) 1 else 0,
             graceMinutesRemaining = 0,
             statusMessage = statusMessage
-        )
+        ) }
     }
 
     fun hasActiveSession(): Boolean = _runtimeState.value.activeSession != null

@@ -23,10 +23,11 @@ import com.example.privatessh.terminal.input.ModifierKey
 import com.example.privatessh.terminal.input.SpecialKey
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @HiltViewModel
@@ -46,11 +47,11 @@ class TerminalViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(TerminalUiState())
     val uiState = _uiState.asStateFlow()
 
-    private val _effect = MutableStateFlow<TerminalUiEffect?>(null)
-    val effect = _effect.asStateFlow()
+    private val _effect = Channel<TerminalUiEffect>(Channel.BUFFERED)
+    val effect = _effect.receiveAsFlow()
 
-    private var currentHost: HostProfile? = null
-    private var pendingHostKeyDecision: CompletableDeferred<HostKeyDecision>? = null
+    @Volatile private var currentHost: HostProfile? = null
+    @Volatile private var pendingHostKeyDecision: CompletableDeferred<HostKeyDecision>? = null
 
     init {
         viewModelScope.launch {
@@ -134,7 +135,7 @@ class TerminalViewModel @Inject constructor(
 
             val host = getHostByIdUseCase(hostId)
             if (host == null) {
-                _effect.value = TerminalUiEffect.ShowConnectionError("Host not found")
+                _effect.trySend(TerminalUiEffect.ShowConnectionError("Host not found"))
                 return@launch
             }
 
@@ -150,7 +151,7 @@ class TerminalViewModel @Inject constructor(
                 }
                 AuthType.PRIVATE_KEY -> {
                     if (!privateKeyAuthStrategy.hasPrivateKey(host.id)) {
-                        _effect.value = TerminalUiEffect.ShowConnectionError("No private key stored for this host")
+                        _effect.trySend(TerminalUiEffect.ShowConnectionError("No private key stored for this host"))
                         return@launch
                     }
                 }
@@ -169,7 +170,7 @@ class TerminalViewModel @Inject constructor(
 
     fun cancelPasswordPrompt() {
         _uiState.value = _uiState.value.copy(isAwaitingPassword = false)
-        _effect.value = TerminalUiEffect.NavigateBack
+        _effect.trySend(TerminalUiEffect.NavigateBack)
     }
 
     fun onHostKeyDecision(decision: HostKeyDecision) {
@@ -204,14 +205,14 @@ class TerminalViewModel @Inject constructor(
     fun onSpecialKeyClick(key: SpecialKey) {
         viewModelScope.launch {
             inputController.handleSpecialKey(key, _uiState.value.rendererState)
-            _effect.value = TerminalUiEffect.Vibrate
+            _effect.trySend(TerminalUiEffect.Vibrate)
         }
     }
 
     fun onModifierKeyClick(key: ModifierKey) {
         inputController.handleModifierTap(key)
         updateModifierStates()
-        _effect.value = TerminalUiEffect.Vibrate
+        _effect.trySend(TerminalUiEffect.Vibrate)
     }
 
     fun onTerminalResize(columns: Int, rows: Int) {
@@ -252,26 +253,27 @@ class TerminalViewModel @Inject constructor(
 
     fun onSelectionCopied() {
         if (_uiState.value.selectedText.isNotBlank()) {
-            _effect.value = TerminalUiEffect.ShowToast("Copied terminal selection")
+            _effect.trySend(TerminalUiEffect.ShowToast("Copied terminal selection"))
         }
         clearSelection()
     }
 
     fun navigateBack() {
         if (_uiState.value.isConnected) {
-            _effect.value = TerminalUiEffect.ShowDisconnectDialog
+            _effect.trySend(TerminalUiEffect.ShowDisconnectDialog)
         } else {
-            _effect.value = TerminalUiEffect.NavigateBack
+            _effect.trySend(TerminalUiEffect.NavigateBack)
         }
     }
 
     fun confirmDisconnect() {
         disconnect()
-        _effect.value = TerminalUiEffect.NavigateBack
+        _effect.trySend(TerminalUiEffect.NavigateBack)
     }
 
-    fun clearEffect() {
-        _effect.value = null
+    override fun onCleared() {
+        super.onCleared()
+        _effect.close()
     }
 
     private fun connectCurrentHost() {
@@ -292,14 +294,14 @@ class TerminalViewModel @Inject constructor(
             )
             _uiState.value = _uiState.value.copy(isLoading = false)
             if (!success) {
-                _effect.value = TerminalUiEffect.ShowConnectionError(
+                _effect.trySend(TerminalUiEffect.ShowConnectionError(
                     observeSessionUseCase.getCurrentError() ?: "Connection failed"
-                )
+                ))
             }
         }
     }
 
-    private fun waitForHostKeyDecision(
+    private suspend fun waitForHostKeyDecision(
         algorithm: String,
         fingerprint: String
     ): HostKeyDecision {
@@ -308,7 +310,7 @@ class TerminalViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             hostKeyPrompt = HostKeyPrompt(algorithm = algorithm, fingerprint = fingerprint)
         )
-        return runBlocking { deferred.await() }
+        return deferred.await()
     }
 
     private fun updateModifierStates() {

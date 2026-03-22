@@ -1,7 +1,9 @@
 package com.example.privatessh
 
 import android.app.Application
+import com.example.privatessh.BuildConfig
 import dagger.hilt.android.HiltAndroidApp
+import timber.log.Timber
 
 /**
  * Application class for the Private SSH application.
@@ -13,6 +15,8 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Hilt will initialize all dependencies automatically
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
     }
 }

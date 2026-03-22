@@ -3,6 +3,7 @@ package com.example.privatessh.domain.usecase.security
 import com.example.privatessh.domain.model.HostProfile
 import com.example.privatessh.domain.repository.SecureKeyRepository
 import dagger.hilt.android.scopes.ViewModelScoped
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -30,6 +31,7 @@ class LoadPrivateKeyUseCase @Inject constructor(
             secureKeyRepository.storeKey(keyAlias, privateKeyPem)
             true
         } catch (e: Exception) {
+            Timber.w(e, "Failed to store private key for host %s", hostProfile.id)
             false
         }
     }
@@ -51,6 +53,7 @@ class LoadPrivateKeyUseCase @Inject constructor(
             secureKeyRepository.deleteKey(keyAlias)
             true
         } catch (e: Exception) {
+            Timber.w(e, "Failed to remove private key for host %s", hostProfile.id)
             false
         }
     }

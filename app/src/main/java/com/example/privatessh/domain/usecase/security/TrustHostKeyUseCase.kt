@@ -3,6 +3,7 @@ package com.example.privatessh.domain.usecase.security
 import com.example.privatessh.domain.model.KnownHostEntry
 import com.example.privatessh.domain.repository.KnownHostRepository
 import dagger.hilt.android.scopes.ViewModelScoped
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -27,6 +28,7 @@ class TrustHostKeyUseCase @Inject constructor(
             knownHostRepository.addKnownHost(entry)
             true
         } catch (e: Exception) {
+            Timber.w(e, "Failed to trust host key for %s", host)
             false
         }
     }
@@ -39,6 +41,7 @@ class TrustHostKeyUseCase @Inject constructor(
             knownHostRepository.addKnownHost(entry)
             true
         } catch (e: Exception) {
+            Timber.w(e, "Failed to trust host key entry for %s", entry.host)
             false
         }
     }

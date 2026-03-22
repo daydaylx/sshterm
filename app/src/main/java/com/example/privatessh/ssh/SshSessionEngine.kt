@@ -25,7 +25,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import net.schmizz.sshj.SSHClient
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -81,15 +83,12 @@ class SshSessionEngine @Inject constructor(
     private var lastSessionPolicy: SessionPolicy = SessionPolicy()
     private var tmuxMarkerCarry = ByteArray(0)
 
-    @Volatile
-    private var disconnectRequested = false
-
-    @Volatile
-    private var closeHandled = false
+    private val disconnectRequested = AtomicBoolean(false)
+    private val closeHandled = AtomicBoolean(false)
 
     suspend fun connect(
         hostProfile: HostProfile,
-        onHostKeyDecision: (algorithm: String, fingerprint: String) -> HostKeyDecision,
+        onHostKeyDecision: suspend (algorithm: String, fingerprint: String) -> HostKeyDecision,
         allowOnlyKnownHosts: Boolean = false,
         columns: Int = lastColumns,
         rows: Int = lastRows,
@@ -98,8 +97,8 @@ class SshSessionEngine @Inject constructor(
     ): Boolean = withContext(Dispatchers.IO) {
         disconnect()
 
-        disconnectRequested = false
-        closeHandled = false
+        disconnectRequested.set(false)
+        closeHandled.set(false)
         _state.value = if (isReconnect) SshSessionState.RECONNECTING else SshSessionState.CONNECTING
         _error.value = null
         _currentHost.value = hostProfile
@@ -142,10 +141,11 @@ class SshSessionEngine @Inject constructor(
 
             currentClient = client
             currentShellHandle = shellHandle
-            sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            sessionScope = scope
 
             outputJob = outputPump.start(
-                scope = sessionScope!!,
+                scope = scope,
                 inputStream = shellHandle.shell.inputStream,
                 onOutput = { data ->
                     appendOutput(data)
@@ -155,12 +155,16 @@ class SshSessionEngine @Inject constructor(
                 }
             )
             errorJob = errorPump.start(
-                scope = sessionScope!!,
-                errorStream = shellHandle.shell.errorStream
+                scope = scope,
+                errorStream = shellHandle.shell.errorStream,
+                onClosed = { _ -> }
             ) { data ->
                 appendOutput(data)
             }
-            inputWriter.setOutputStream(shellHandle.shell.outputStream)
+            inputWriter.setOutputStream(
+                stream = shellHandle.shell.outputStream,
+                onError = { e -> handleUnexpectedClosure("SSH write error: ${e.message}") }
+            )
             applyShellBootstrap(sessionPolicy)
 
             _state.value = SshSessionState.CONNECTED
@@ -196,7 +200,7 @@ class SshSessionEngine @Inject constructor(
         )
     }
 
-    fun canReconnect(): ReconnectCapability {
+    suspend fun canReconnect(): ReconnectCapability {
         val hostProfile = _currentHost.value ?: return ReconnectCapability(
             isAllowed = false,
             passwordCached = false,
@@ -231,8 +235,8 @@ class SshSessionEngine @Inject constructor(
     }
 
     suspend fun disconnect(preserveHost: Boolean = false) {
-        disconnectRequested = true
-        closeHandled = true
+        disconnectRequested.set(true)
+        closeHandled.set(true)
         _error.value = null
 
         if (_state.value != SshSessionState.DISCONNECTED) {
@@ -368,7 +372,9 @@ class SshSessionEngine @Inject constructor(
         tmuxConfirmationJob?.cancel()
         tmuxConfirmationJob = null
         sessionScope?.cancel()
-        joinAll(*listOfNotNull(outputJob, errorJob).toTypedArray())
+        withTimeoutOrNull(5_000) {
+            joinAll(*listOfNotNull(outputJob, errorJob).toTypedArray())
+        }
 
         currentShellHandle?.let { shellChannelAdapter.closeChannel(it) }
 
@@ -395,11 +401,10 @@ class SshSessionEngine @Inject constructor(
     }
 
     private fun handleUnexpectedClosure(reason: String?) {
-        if (disconnectRequested || closeHandled) {
-            return
-        }
-        closeHandled = true
-        sessionScope?.launch {
+        if (disconnectRequested.get()) return
+        if (!closeHandled.compareAndSet(false, true)) return
+        val scope = sessionScope ?: return
+        scope.launch {
             _error.value = reason ?: "SSH session closed unexpectedly."
             cleanupSession(preserveHost = true, finalState = SshSessionState.ERROR)
         }

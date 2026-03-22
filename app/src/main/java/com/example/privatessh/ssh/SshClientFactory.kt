@@ -17,9 +17,13 @@ class SshClientFactory @Inject constructor(
      * Creates a new SSH client configured for the given host profile.
      */
     fun createClient(hostProfile: HostProfile): SSHClient {
-        val client = SSHClient()
-        client.setConnectTimeout(15_000)
-        client.setTimeout(30_000)
-        return client
+        return try {
+            val client = SSHClient()
+            client.setConnectTimeout(15_000)
+            client.setTimeout(30_000)
+            client
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to create SSH client: ${e.message}", e)
+        }
     }
 }

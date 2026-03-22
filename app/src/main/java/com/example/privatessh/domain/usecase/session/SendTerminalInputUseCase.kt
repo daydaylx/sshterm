@@ -4,6 +4,7 @@ import com.example.privatessh.ssh.SshSessionEngine
 import dagger.hilt.android.scopes.ViewModelScoped
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -22,6 +23,7 @@ class SendTerminalInputUseCase @Inject constructor(
             sessionEngine.sendInput(data)
             true
         } catch (e: Exception) {
+            Timber.w(e, "Failed to send terminal input")
             false
         }
     }

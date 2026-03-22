@@ -55,13 +55,13 @@ class TerminalSessionService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            SessionNotificationFactory.ACTION_RECONNECT -> handleReconnect(manual = true)
+            SessionNotificationFactory.ACTION_RECONNECT -> serviceScope.launch { handleReconnect(manual = true) }
             SessionNotificationFactory.ACTION_DISCONNECT -> handleDisconnect()
             SessionNotificationFactory.ACTION_START_SESSION, null -> {
                 val sessionId = intent?.getStringExtra("session_id")
                 val hostName = intent?.getStringExtra("host_name")
                 if (!sessionId.isNullOrBlank() && !hostName.isNullOrBlank()) {
-                    startSession(sessionId, hostName)
+                    serviceScope.launch { startSession(sessionId, hostName) }
                 }
             }
         }
@@ -96,7 +96,7 @@ class TerminalSessionService : Service() {
         stopSelf()
     }
 
-    private fun startSession(sessionId: String, hostName: String) {
+    private suspend fun startSession(sessionId: String, hostName: String) {
         graceController.stopGracePeriod()
         val activeSession = buildActiveSession(sessionId, hostName)
         sessionRegistry.registerSession(activeSession)
@@ -110,7 +110,7 @@ class TerminalSessionService : Service() {
         )
     }
 
-    private fun handleReconnect(manual: Boolean) {
+    private suspend fun handleReconnect(manual: Boolean) {
         graceController.stopGracePeriod()
         val activeSession = sessionRegistry.getActiveSession() ?: return
         val capability = sessionEngine.canReconnect()
@@ -264,7 +264,8 @@ class TerminalSessionService : Service() {
                     }
 
                     SshSessionState.ERROR -> {
-                        if (runtimeState.lifecycleState in setOf(
+                        val freshState = sessionRegistry.runtimeState.value
+                        if (freshState.lifecycleState in setOf(
                                 SessionLifecycleState.DISCONNECTING,
                                 SessionLifecycleState.GRACE,
                                 SessionLifecycleState.RECONNECTING,
@@ -290,7 +291,8 @@ class TerminalSessionService : Service() {
                     }
 
                     SshSessionState.DISCONNECTED -> {
-                        if (runtimeState.lifecycleState == SessionLifecycleState.DISCONNECTING) {
+                        val freshState = sessionRegistry.runtimeState.value
+                        if (freshState.lifecycleState == SessionLifecycleState.DISCONNECTING) {
                             stopSession()
                         }
                     }
@@ -339,7 +341,7 @@ class TerminalSessionService : Service() {
         }
     }
 
-    private fun buildActiveSession(sessionId: String, fallbackHostName: String): ActiveSession {
+    private suspend fun buildActiveSession(sessionId: String, fallbackHostName: String): ActiveSession {
         val host = sessionEngine.currentHost.value
         val capability = sessionEngine.canReconnect()
         val shellStatus = sessionEngine.shellStatus.value

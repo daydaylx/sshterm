@@ -23,7 +23,7 @@ class StartSessionUseCase @Inject constructor(
 
     suspend operator fun invoke(
         hostProfile: HostProfile,
-        onHostKeyUnknown: (algorithm: String, fingerprint: String) -> HostKeyDecision,
+        onHostKeyUnknown: suspend (algorithm: String, fingerprint: String) -> HostKeyDecision,
         columns: Int = 80,
         rows: Int = 24
     ): Boolean = withContext(kotlinx.coroutines.Dispatchers.IO) {

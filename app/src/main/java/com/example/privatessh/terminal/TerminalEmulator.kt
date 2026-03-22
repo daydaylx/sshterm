@@ -12,9 +12,13 @@ class TerminalEmulator(
     private val buffer = TerminalBuffer(initialColumns = columns, initialRows = rows)
 
     fun feed(bytes: ByteArray): TerminalRendererState {
-        val tokens = parser.feed(bytes)
-        interpreter.apply(tokens, buffer)
-        return buffer.snapshot()
+        return try {
+            val tokens = parser.feed(bytes)
+            interpreter.apply(tokens, buffer)
+            buffer.snapshot()
+        } catch (_: Exception) {
+            buffer.snapshot()
+        }
     }
 
     fun resize(columns: Int, rows: Int): TerminalRendererState {

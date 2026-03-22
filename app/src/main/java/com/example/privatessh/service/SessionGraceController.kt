@@ -7,6 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,7 +33,6 @@ class SessionGraceController @Inject constructor(
     val state: StateFlow<GraceState> = _state.asStateFlow()
 
     private var graceJob: Job? = null
-    private var graceScope: CoroutineScope? = null
 
     /**
      * Default grace period duration in minutes.
@@ -44,7 +44,6 @@ class SessionGraceController @Inject constructor(
      */
     fun startGracePeriod(scope: CoroutineScope, onGraceExpired: () -> Unit) {
         graceJob?.cancel()
-        graceScope = scope
         var minutesRemaining = gracePeriodMinutes
         _state.value = GraceState.Active(minutesRemaining)
 
@@ -52,9 +51,7 @@ class SessionGraceController @Inject constructor(
             while (minutesRemaining > 0) {
                 delay(60_000) // Wait 1 minute
                 minutesRemaining--
-                if (minutesRemaining > 0) {
-                    _state.value = GraceState.Active(minutesRemaining)
-                }
+                _state.value = GraceState.Active(minutesRemaining)
             }
             _state.value = GraceState.Expired
             onGraceExpired()
@@ -67,7 +64,6 @@ class SessionGraceController @Inject constructor(
     fun stopGracePeriod() {
         graceJob?.cancel()
         graceJob = null
-        graceScope = null
         _state.value = GraceState.Inactive
     }
 
@@ -75,9 +71,10 @@ class SessionGraceController @Inject constructor(
      * Extends the grace period by the specified minutes.
      */
     fun extendGracePeriod(additionalMinutes: Int) {
-        val currentState = _state.value
-        if (currentState is GraceState.Active) {
-            _state.value = GraceState.Active(currentState.minutesRemaining + additionalMinutes)
+        _state.update { current ->
+            if (current is GraceState.Active) {
+                GraceState.Active(current.minutesRemaining + additionalMinutes)
+            } else current
         }
     }
 

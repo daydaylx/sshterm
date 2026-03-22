@@ -13,44 +13,33 @@ import javax.inject.Singleton
 class InputWriter @Inject constructor() {
 
     private var outputStream: OutputStream? = null
+    private var onWriteError: ((Exception) -> Unit)? = null
 
-    /**
-     * Sets the output stream for writing input.
-     */
-    fun setOutputStream(stream: OutputStream?) {
+    fun setOutputStream(stream: OutputStream?, onError: ((Exception) -> Unit)? = null) {
         outputStream = stream
+        onWriteError = onError
     }
 
-    /**
-     * Writes input to the SSH channel.
-     */
     suspend fun write(data: ByteArray) = withContext(Dispatchers.IO) {
+        val stream = outputStream ?: return@withContext
         try {
-            outputStream?.write(data)
-            outputStream?.flush()
+            stream.write(data)
+            stream.flush()
         } catch (e: Exception) {
-            // TODO: Handle write errors
+            onWriteError?.invoke(e)
         }
     }
 
-    /**
-     * Sends a special key sequence (like Ctrl+C).
-     */
     suspend fun sendSpecialKey(sequence: ByteArray) {
         write(sequence)
     }
 
-    /**
-     * Writes a string to the input.
-     */
     suspend fun writeString(text: String) {
         write(text.toByteArray())
     }
 
-    /**
-     * Clears the output stream.
-     */
     fun clear() {
         outputStream = null
+        onWriteError = null
     }
 }
