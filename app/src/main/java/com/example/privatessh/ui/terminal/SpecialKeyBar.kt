@@ -68,7 +68,7 @@ private fun ModifierKeyRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(4.dp),
+            .padding(2.dp),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
         ModifierKey.entries.forEach { key ->
@@ -113,7 +113,7 @@ private fun ModifierKeyButton(
         colors = ButtonDefaults.buttonColors(
             containerColor = backgroundColor
         ),
-        modifier = Modifier.size(72.dp, 48.dp)
+        modifier = Modifier.size(72.dp, 40.dp)
     ) {
         Text(
             text = when (isLatched) {
@@ -135,8 +135,8 @@ private fun SpecialKeyRow(
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        contentPadding = PaddingValues(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        contentPadding = PaddingValues(2.dp)
     ) {
         items(SpecialKey.getDisplayKeys()) { key ->
             SpecialKeyButton(
@@ -157,7 +157,7 @@ private fun SpecialKeyButton(
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = Modifier.size(64.dp, 48.dp)
+        modifier = Modifier.size(64.dp, 40.dp)
     ) {
         Text(
             text = key.displayName,

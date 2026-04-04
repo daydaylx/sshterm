@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,10 +31,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.privatessh.R
 import com.example.privatessh.presentation.terminal.TerminalUiEffect
 import com.example.privatessh.presentation.terminal.TerminalViewModel
 import com.example.privatessh.service.security.BiometricGate
@@ -47,6 +51,7 @@ import com.example.privatessh.ui.dialogs.FingerprintDialog
 fun TerminalScreen(
     hostId: String,
     onNavigateBack: () -> Unit,
+    onNavigateToDiagnostics: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: TerminalViewModel = hiltViewModel()
 ) {
@@ -55,9 +60,14 @@ fun TerminalScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val view = LocalView.current
+    val passwordTitle = stringResource(R.string.terminal_password_required)
+    val passwordLabel = stringResource(R.string.terminal_password_label)
+    val connectLabel = stringResource(R.string.terminal_connect)
+    val cancelLabel = stringResource(R.string.terminal_cancel)
+    val terminalInputLabel = stringResource(R.string.terminal_input_label)
     var showDisconnectDialog by remember { mutableStateOf(false) }
     var password by rememberSaveable { mutableStateOf("") }
-    var inputBuffer by rememberSaveable { mutableStateOf("") }
+    var inputBuffer by remember { mutableStateOf(TextFieldValue()) }
 
     LaunchedEffect(hostId) {
         viewModel.connect(hostId)
@@ -73,7 +83,7 @@ fun TerminalScreen(
                 TerminalUiEffect.RequestBiometricAuth -> {
                     val activity = context as? AppCompatActivity
                     if (activity != null) {
-                        val granted = BiometricGate.authenticate(activity, "SSH-Verbindung")
+                        val granted = BiometricGate.authenticate(activity, context.getString(R.string.terminal_biometric_title))
                         viewModel.onBiometricAuthResult(granted)
                     } else {
                         viewModel.onBiometricAuthResult(false)
@@ -116,7 +126,7 @@ fun TerminalScreen(
 
     uiState.hostKeyPrompt?.let { prompt ->
         FingerprintDialog(
-            hostName = uiState.hostName.ifBlank { "SSH host" },
+            hostName = uiState.hostName.ifBlank { context.getString(R.string.terminal_default_host) },
             algorithm = prompt.algorithm,
             fingerprint = prompt.fingerprint,
             onDecision = viewModel::onHostKeyDecision
@@ -126,12 +136,12 @@ fun TerminalScreen(
     if (uiState.isAwaitingPassword) {
         AlertDialog(
             onDismissRequest = viewModel::cancelPasswordPrompt,
-            title = { Text("Password required") },
+            title = { Text(passwordTitle) },
             text = {
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("SSH password") },
+                    label = { Text(passwordLabel) },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Password,
                         imeAction = ImeAction.Done
@@ -149,7 +159,7 @@ fun TerminalScreen(
                     viewModel.submitPassword(password)
                     password = ""
                 }) {
-                    Text("Connect")
+                    Text(connectLabel)
                 }
             },
             dismissButton = {
@@ -157,13 +167,14 @@ fun TerminalScreen(
                     password = ""
                     viewModel.cancelPasswordPrompt()
                 }) {
-                    Text("Cancel")
+                    Text(cancelLabel)
                 }
             }
         )
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         modifier = modifier.fillMaxSize(),
         topBar = {
             TerminalTopBar(
@@ -171,37 +182,44 @@ fun TerminalScreen(
                 sessionState = uiState.sessionState,
                 lifecycleState = uiState.lifecycleState,
                 canReconnect = uiState.canReconnect,
+                hasDiagnostics = uiState.hasDiagnostics,
+                latestDiagnosticError = uiState.latestDiagnosticError,
+                onDiagnostics = onNavigateToDiagnostics,
                 onDisconnect = { showDisconnectDialog = true },
                 onReconnect = { viewModel.connect(hostId) }
             )
         },
         bottomBar = {
             Column {
-                TerminalSelectionToolbar(
-                    hasSelection = uiState.hasSelection,
-                    selectedText = uiState.selectedText,
-                    onCopy = {
-                        if (uiState.selectedText.isNotBlank()) {
-                            clipboardManager.setText(AnnotatedString(uiState.selectedText))
-                            viewModel.onSelectionCopied()
-                        }
-                    },
-                    onPaste = {
-                        val clipboardText = clipboardManager.getText()?.text.orEmpty()
-                        if (clipboardText.isNotBlank()) {
-                            viewModel.onTextInput(clipboardText)
-                            viewModel.clearSelection()
-                        }
-                    },
-                    onCancel = viewModel::clearSelection
-                )
+                if (uiState.hasSelection) {
+                    TerminalSelectionToolbar(
+                        hasSelection = uiState.hasSelection,
+                        selectedText = uiState.selectedText,
+                        onCopy = {
+                            if (uiState.selectedText.isNotBlank()) {
+                                clipboardManager.setText(AnnotatedString(uiState.selectedText))
+                                viewModel.onSelectionCopied()
+                            }
+                        },
+                        onPaste = {
+                            val clipboardText = clipboardManager.getText()?.text.orEmpty()
+                            if (clipboardText.isNotBlank()) {
+                                viewModel.onTextInput(clipboardText)
+                                viewModel.clearSelection()
+                            }
+                        },
+                        onCancel = viewModel::clearSelection
+                    )
+                }
                 OutlinedTextField(
                     value = inputBuffer,
                     onValueChange = { newValue ->
-                        inputBuffer = ""
-                        viewModel.onTextInput(newValue)
+                        if (newValue.text.isNotEmpty()) {
+                            viewModel.onTextInput(newValue.text)
+                        }
+                        inputBuffer = TextFieldValue()
                     },
-                    label = { Text("Type into session") },
+                    label = { Text(terminalInputLabel) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default)
                 )

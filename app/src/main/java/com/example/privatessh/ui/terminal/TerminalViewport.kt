@@ -50,7 +50,6 @@ fun TerminalViewport(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
-            .padding(8.dp)
     ) {
         val columns = maxOf(20, (maxWidth.value / (fontSizeSp * 0.65f)).toInt())
         val rows = maxOf(6, (maxHeight.value / (fontSizeSp * 1.45f)).toInt())

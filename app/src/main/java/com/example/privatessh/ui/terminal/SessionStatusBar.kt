@@ -10,7 +10,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.privatessh.R
 import com.example.privatessh.ssh.SshSessionState
 import com.example.privatessh.service.SessionLifecycleState
 
@@ -26,31 +28,79 @@ fun SessionStatusBar(
     statusMessage: String?,
     modifier: Modifier = Modifier
 ) {
-    val (statusText, backgroundColor) = when (lifecycleState) {
+    val reconnectingText = stringResource(R.string.terminal_reconnecting_to, hostName)
+    val connectingText = stringResource(R.string.terminal_connecting_to, hostName)
+    val disconnectingText = stringResource(R.string.terminal_disconnecting)
+    val errorText = stringResource(R.string.terminal_error)
+    val disconnectedText = stringResource(R.string.terminal_disconnected)
+    val authenticatingText = stringResource(R.string.terminal_authenticating)
+
+    val (statusText, backgroundColor, textColor) = when (lifecycleState) {
         SessionLifecycleState.GRACE ->
-            "Session in grace period: $graceMinutesRemaining min remaining" to MaterialTheme.colorScheme.secondaryContainer
+            Triple(
+                stringResource(R.string.terminal_grace_period, graceMinutesRemaining),
+                MaterialTheme.colorScheme.secondaryContainer,
+                MaterialTheme.colorScheme.onSecondaryContainer
+            )
 
         SessionLifecycleState.RECONNECTING ->
-            (statusMessage ?: "Reconnecting to $hostName...") to MaterialTheme.colorScheme.tertiaryContainer
+            Triple(
+                statusMessage ?: reconnectingText,
+                MaterialTheme.colorScheme.tertiaryContainer,
+                MaterialTheme.colorScheme.onTertiaryContainer
+            )
 
         SessionLifecycleState.FAILED ->
-            (statusMessage ?: "Connection error") to MaterialTheme.colorScheme.errorContainer
+            Triple(
+                statusMessage ?: errorText,
+                MaterialTheme.colorScheme.errorContainer,
+                MaterialTheme.colorScheme.onErrorContainer
+            )
 
         SessionLifecycleState.DISCONNECTING ->
-            "Disconnecting..." to MaterialTheme.colorScheme.surfaceVariant
+            Triple(
+                disconnectingText,
+                MaterialTheme.colorScheme.surfaceVariant,
+                MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
         else -> when (sessionState) {
             SshSessionState.CONNECTED ->
-                (
-                    statusMessage?.let { "Connected to $hostName · $it" }
-                        ?: "Connected to $hostName"
-                    ) to MaterialTheme.colorScheme.primaryContainer
+                Triple(
+                    if (statusMessage != null) {
+                        stringResource(R.string.terminal_connected_with_status, hostName, statusMessage)
+                    } else {
+                        stringResource(R.string.terminal_connected_to, hostName)
+                    },
+                    MaterialTheme.colorScheme.primaryContainer,
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                )
             SshSessionState.CONNECTING,
-            SshSessionState.RECONNECTING -> "Connecting to $hostName..." to MaterialTheme.colorScheme.tertiaryContainer
-            SshSessionState.AUTHENTICATING -> "Authenticating..." to MaterialTheme.colorScheme.tertiaryContainer
-            SshSessionState.ERROR -> "Connection error" to MaterialTheme.colorScheme.errorContainer
-            SshSessionState.DISCONNECTED -> "Disconnected" to MaterialTheme.colorScheme.surfaceVariant
-            SshSessionState.DISCONNECTING -> "Disconnecting..." to MaterialTheme.colorScheme.surfaceVariant
+            SshSessionState.RECONNECTING -> Triple(
+                connectingText,
+                MaterialTheme.colorScheme.tertiaryContainer,
+                MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            SshSessionState.AUTHENTICATING -> Triple(
+                authenticatingText,
+                MaterialTheme.colorScheme.tertiaryContainer,
+                MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            SshSessionState.ERROR -> Triple(
+                errorText,
+                MaterialTheme.colorScheme.errorContainer,
+                MaterialTheme.colorScheme.onErrorContainer
+            )
+            SshSessionState.DISCONNECTED -> Triple(
+                disconnectedText,
+                MaterialTheme.colorScheme.surfaceVariant,
+                MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            SshSessionState.DISCONNECTING -> Triple(
+                disconnectingText,
+                MaterialTheme.colorScheme.surfaceVariant,
+                MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 
@@ -65,7 +115,7 @@ fun SessionStatusBar(
         Text(
             text = statusText,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = textColor
         )
     }
 }
