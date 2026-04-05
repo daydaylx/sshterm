@@ -6,7 +6,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.privatessh.R
 
 /**
  * Dialog for confirming reconnection to a lost SSH session.
@@ -20,25 +22,16 @@ fun ReconnectDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Reconnect to $hostName?") },
-        text = {
-            Text(
-                "The connection to $hostName was lost. " +
-                "Do you want to attempt to reconnect?"
-            )
-        },
+        title = { Text(stringResource(R.string.dialog_reconnect_title, hostName)) },
+        text = { Text(stringResource(R.string.dialog_reconnect_message, hostName)) },
         confirmButton = {
-            Button(
-                onClick = onConfirm
-            ) {
-                Text("Reconnect")
+            Button(onClick = onConfirm) {
+                Text(stringResource(R.string.dialog_reconnect_confirm))
             }
         },
         dismissButton = {
-            Button(
-                onClick = onDismiss
-            ) {
-                Text("Cancel")
+            Button(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_reconnect_cancel))
             }
         },
         modifier = modifier

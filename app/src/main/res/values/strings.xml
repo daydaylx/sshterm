@@ -15,10 +15,19 @@
     <string name="host_list_empty_hint">Zum Start einen Server hinzufügen</string>
     <string name="host_list_loading">Server werden geladen…</string>
     <string name="host_list_load_error">Server konnten nicht geladen werden.</string>
+    <string name="host_list_subtitle">Verbindungen, Profile und aktive Ziele im Blick</string>
+    <string name="host_list_hero_eyebrow">Connection Hub</string>
+    <string name="host_list_hero_title">Schneller Zugriff auf deine SSH-Ziele</string>
+    <string name="host_list_hero_body">Starte Sitzungen, prüfe Tailnet-Ziele und halte deine wichtigsten Hosts griffbereit.</string>
+    <string name="host_list_metric_hosts">Hosts</string>
+    <string name="host_list_metric_tailnet">Tailnet</string>
+    <string name="host_list_metric_keys">Keys</string>
     <string name="host_list_delete_success">Server gelöscht</string>
     <string name="host_list_delete_error">Server konnte nicht gelöscht werden.</string>
     <string name="host_card_edit">Bearbeiten</string>
     <string name="host_card_delete">Löschen</string>
+    <string name="host_card_connect">Verbinden</string>
+    <string name="host_card_never_connected">Noch keine Sitzung gestartet</string>
     <string name="host_card_tailscale">Tailscale</string>
     <string name="host_card_last_connected">Zuletzt verbunden: %s</string>
     <string name="host_card_just_now">Gerade eben</string>
@@ -30,7 +39,13 @@
     <!-- Host Edit -->
     <string name="host_edit_title_new">Neuer Server</string>
     <string name="host_edit_title_edit">Server bearbeiten</string>
+    <string name="host_edit_subtitle">Profil, Zieltyp und Authentifizierung konfigurieren</string>
+    <string name="host_edit_hero_eyebrow">Profile Builder</string>
+    <string name="host_edit_hero_title_new">Neues Verbindungsprofil anlegen</string>
+    <string name="host_edit_hero_title_edit">Verbindungsprofil verfeinern</string>
+    <string name="host_edit_hero_body">Lege fest, wie die Sitzung aufgebaut wird und welche Authentifizierung dafür bereitsteht.</string>
     <string name="host_edit_connection_section">Verbindung</string>
+    <string name="host_edit_connection_body">Name, Ziel und Benutzer werden als kompakte Startkonfiguration für schnelle Verbindungen gespeichert.</string>
     <string name="host_edit_target_section">Ziel</string>
     <string name="host_edit_auth_section">Authentifizierung</string>
     <string name="host_edit_name">Name</string>
@@ -43,11 +58,14 @@
     <string name="host_edit_auth_password">Passwort</string>
     <string name="host_edit_auth_private_key">Privater Schlüssel</string>
     <string name="host_edit_private_key_stored">Schlüssel gespeichert ✓</string>
+    <string name="host_edit_private_key_stored_body">Ein privater Schlüssel ist bereits sicher gespeichert. Du kannst ihn behalten oder direkt ersetzen.</string>
     <string name="host_edit_private_key_clear">Schlüssel löschen</string>
     <string name="host_edit_private_key_replace">Neuen Schlüssel eingeben (PEM)</string>
     <string name="host_edit_private_key_label">Privater Schlüssel (PEM)</string>
+    <string name="host_edit_private_key_support">PEM-Inhalt direkt einfügen. Der Schlüssel wird sicher gespeichert und nicht im Klartext behalten.</string>
     <string name="host_edit_password">Password</string>
     <string name="host_edit_private_key">Private Key</string>
+    <string name="host_edit_working">Profil wird aktualisiert…</string>
     <string name="host_edit_save">Server speichern</string>
     <string name="host_edit_cancel">Abbrechen</string>
     <string name="host_edit_delete">Server löschen</string>
@@ -59,6 +77,8 @@
     <string name="terminal_title">Terminal</string>
     <string name="terminal_default_host">SSH-Host</string>
     <string name="terminal_default_session">SSH-Sitzung</string>
+    <string name="terminal_topbar_warning">Warnung</string>
+    <string name="terminal_topbar_trace">Trace</string>
     <string name="terminal_connecting">Verbindung wird hergestellt…</string>
     <string name="terminal_connected">Verbunden</string>
     <string name="terminal_disconnected">Verbindung getrennt</string>
@@ -75,6 +95,7 @@
     <string name="terminal_paste">Einfügen</string>
     <string name="terminal_disconnect">Trennen</string>
     <string name="terminal_reconnect">Erneut verbinden</string>
+    <string name="terminal_diagnostics">Diagnose</string>
     <string name="terminal_connecting_to">Verbindung zu %1$s wird hergestellt…</string>
     <string name="terminal_connected_to">Verbunden mit %1$s</string>
     <string name="terminal_connected_with_status">Verbunden mit %1$s · %2$s</string>
@@ -97,6 +118,7 @@
     <string name="notification_action_return">Zur Sitzung</string>
     <string name="notification_action_disconnect">Trennen</string>
     <string name="notification_action_reconnect">Erneut verbinden</string>
+    <string name="notification_action_extend_grace">+10 Min.</string>
     <string name="notification_reconnecting_title">SSH-Sitzung wird erneut verbunden</string>
     <string name="notification_grace_title">SSH-Sitzung in Nachlaufzeit</string>
     <string name="notification_grace_remaining">%d Min. verbleibend</string>
@@ -104,6 +126,12 @@
 
     <!-- Settings -->
     <string name="settings_title">Einstellungen</string>
+    <string name="settings_subtitle">Sitzung, Terminal und Sicherheit zentral steuern</string>
+    <string name="settings_hero_eyebrow">Control Center</string>
+    <string name="settings_hero_title">Terminal-Verhalten feinjustieren</string>
+    <string name="settings_hero_body">Passe Verbindungsstabilität, Terminaldarstellung und Sicherheitsstufen an dein Gerät an.</string>
+    <string name="settings_metric_enabled">Aktiv</string>
+    <string name="settings_metric_disabled">Aus</string>
     <string name="settings_section_session">Sitzung</string>
     <string name="settings_card_connection_behavior">Verbindungsverhalten</string>
     <string name="settings_grace_period">Nachlaufzeit</string>
@@ -134,6 +162,30 @@
     <string name="settings_card_background_execution">Hintergrundausführung</string>
     <string name="settings_battery_optimization_handled">Batterieoptimierung erledigt</string>
     <string name="settings_battery_optimization_handled_description">Merkt, ob das Gerät für stabile Hintergrundausführung eingerichtet wurde</string>
+    <string name="settings_section_diagnostics">Diagnose</string>
+    <string name="settings_card_diagnostics">Fehleranalyse</string>
+    <string name="settings_diagnostics_description">Öffnet die technischen Verbindungs- und Fehlerprotokolle der aktuellen App-Sitzung.</string>
+    <string name="settings_open_diagnostics">Diagnose öffnen</string>
+
+    <!-- Diagnostics -->
+    <string name="diagnostics_title">Diagnose</string>
+    <string name="diagnostics_subtitle">Verbindungsereignisse, Fehler und Session-Zustände</string>
+    <string name="diagnostics_hero_eyebrow">Trace Console</string>
+    <string name="diagnostics_hero_title">Aktuelle App-Diagnose</string>
+    <string name="diagnostics_metric_events">Einträge</string>
+    <string name="diagnostics_metric_state">Status</string>
+    <string name="diagnostics_copy">Diagnose kopieren</string>
+    <string name="diagnostics_clear">Diagnose leeren</string>
+    <string name="diagnostics_empty">Noch keine Diagnoseeinträge vorhanden.</string>
+    <string name="diagnostics_active_session">Aktive Sitzung</string>
+    <string name="diagnostics_last_session">Zuletzt protokollierte Sitzung</string>
+    <string name="diagnostics_no_session">Keine aktive Sitzung</string>
+    <string name="diagnostics_session_state">Status: %s</string>
+    <string name="diagnostics_last_status">Letzte Statusmeldung: %s</string>
+    <string name="diagnostics_event_count">Einträge: %d</string>
+    <string name="diagnostics_copied">Diagnoseprotokoll kopiert</string>
+    <string name="diagnostics_copy_empty">Keine Diagnoseeinträge zum Kopieren</string>
+    <string name="diagnostics_cleared">Diagnoseprotokoll geleert</string>
 
     <!-- Dialogs -->
     <string name="dialog_delete_host_title">Server löschen?</string>
@@ -196,4 +248,55 @@
     <string name="ssh_session_closed_unexpected">SSH-Sitzung wurde unerwartet geschlossen.</string>
     <string name="ssh_channel_closed">SSH-Kanal geschlossen.</string>
     <string name="ssh_channel_closed_unexpected">SSH-Kanal wurde unerwartet geschlossen.</string>
+    <!-- Dialog Defaults -->
+    <string name="dialog_confirm">Bestätigen</string>
+    <string name="dialog_cancel">Abbrechen</string>
+
+    <!-- Tailscale Dialog -->
+    <string name="dialog_tailscale_connection_issue">Tailscale Verbindungsproblem</string>
+    <string name="dialog_tailscale_connection_error">Verbindung zu %1$s über Tailscale fehlgeschlagen.</string>
+
+    <!-- Terminal Status Bar -->
+    <string name="status_bar_live">LIVE</string>
+    <string name="status_bar_auth">AUTH</string>
+    <string name="status_bar_sync">SYNC</string>
+    <string name="status_bar_err">ERR</string>
+    <string name="status_bar_idle">IDLE</string>
+    <string name="status_bar_grace">GRACE</string>
+    <string name="status_bar_reconnect">RECONNECT</string>
+    <string name="status_bar_fail">FAIL</string>
+    <string name="status_bar_exit">EXIT</string>
+
+    <!-- Terminal Top Bar -->
+    <string name="top_bar_grace">Nachlauf</string>
+    <string name="top_bar_reconnect">Reconnect</string>
+    <string name="top_bar_error">Fehler</string>
+    <string name="top_bar_live">Live</string>
+    <string name="top_bar_auth">Auth</string>
+    <string name="top_bar_connecting">Verbindet</string>
+    <string name="top_bar_offline">Offline</string>
+
+    <string name="top_bar_msg_grace">Die Sitzung bleibt im Hintergrund aktiv und kann direkt weiterlaufen.</string>
+    <string name="top_bar_msg_reconnect">Die Verbindung wird im Hintergrund neu aufgebaut.</string>
+    <string name="top_bar_msg_error">Es liegt ein Sitzungsfehler vor. Diagnose oder Reconnect verwenden.</string>
+    <string name="top_bar_msg_live">Interaktive Shell aktiv. Eingabe und Spezialtasten sind direkt verfügbar.</string>
+    <string name="top_bar_msg_auth">Authentifizierung und Session-Aufbau laufen.</string>
+    <string name="top_bar_msg_offline">Noch keine aktive Verbindung. Starte oder stelle die Sitzung erneut her.</string>
+
+    <!-- Diagnostics -->
+    <string name="diag_idle">Inaktiv</string>
+    <string name="diag_connected">Verbunden</string>
+    <string name="diag_disconnecting">Trennt</string>
+    <string name="diag_grace">Nachlauf</string>
+    <string name="diag_reconnect">Reconnect</string>
+    <string name="diag_failed">Fehler</string>
+
+    <string name="diag_cat_connection">Verbindung</string>
+    <string name="diag_cat_auth">Auth</string>
+    <string name="diag_cat_host_key">Host-Key</string>
+    <string name="diag_cat_shell">Shell</string>
+    <string name="diag_cat_keepalive">Keepalive</string>
+    <string name="diag_cat_service">Service</string>
+    <string name="diag_cat_ui">UI</string>
+
 </resources>

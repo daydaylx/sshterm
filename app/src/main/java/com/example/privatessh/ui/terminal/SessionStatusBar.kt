@@ -1,11 +1,12 @@
 package com.example.privatessh.ui.terminal
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -13,12 +14,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.privatessh.R
-import com.example.privatessh.ssh.SshSessionState
 import com.example.privatessh.service.SessionLifecycleState
+import com.example.privatessh.ssh.SshSessionState
+import com.example.privatessh.ui.components.StatusChip
+import com.example.privatessh.ui.theme.AppTheme
 
-/**
- * Status bar at the bottom of the terminal showing connection state.
- */
 @Composable
 fun SessionStatusBar(
     sessionState: SshSessionState,
@@ -104,18 +104,60 @@ fun SessionStatusBar(
         }
     }
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(32.dp)
-            .background(backgroundColor)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = backgroundColor.copy(alpha = 0.32f),
+        shape = MaterialTheme.shapes.medium
     ) {
-        Text(
-            text = statusText,
-            style = MaterialTheme.typography.labelSmall,
-            color = textColor
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            StatusChip(
+                text = when (lifecycleState) {
+                    SessionLifecycleState.GRACE -> stringResource(R.string.status_bar_grace)
+                    SessionLifecycleState.RECONNECTING -> stringResource(R.string.status_bar_reconnect)
+                    SessionLifecycleState.FAILED -> stringResource(R.string.status_bar_fail)
+                    SessionLifecycleState.DISCONNECTING -> stringResource(R.string.status_bar_exit)
+                    else -> when (sessionState) {
+                        SshSessionState.CONNECTED -> stringResource(R.string.status_bar_live)
+                        SshSessionState.AUTHENTICATING -> stringResource(R.string.status_bar_auth)
+                        SshSessionState.CONNECTING, SshSessionState.RECONNECTING -> stringResource(R.string.status_bar_sync)
+                        SshSessionState.ERROR -> stringResource(R.string.status_bar_err)
+                        else -> stringResource(R.string.status_bar_idle)
+                    }
+                },
+                color = when (lifecycleState) {
+                    SessionLifecycleState.GRACE -> AppTheme.warning
+                    SessionLifecycleState.RECONNECTING -> MaterialTheme.colorScheme.tertiary
+                    SessionLifecycleState.FAILED -> AppTheme.danger
+                    else -> when (sessionState) {
+                        SshSessionState.CONNECTED -> AppTheme.success
+                        SshSessionState.ERROR -> AppTheme.danger
+                        SshSessionState.CONNECTING,
+                        SshSessionState.RECONNECTING,
+                        SshSessionState.AUTHENTICATING -> AppTheme.warning
+                        else -> MaterialTheme.colorScheme.outline
+                    }
+                }
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = textColor
+                )
+                statusMessage?.takeIf { it != statusText }?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
     }
 }
