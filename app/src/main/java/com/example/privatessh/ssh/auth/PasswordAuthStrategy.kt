@@ -1,5 +1,7 @@
 package com.example.privatessh.ssh.auth
 
+import com.example.privatessh.diagnostics.DiagnosticCategory
+import com.example.privatessh.diagnostics.SessionDiagnosticsStore
 import com.example.privatessh.ssh.SshSessionConfig
 import net.schmizz.sshj.userauth.UserAuthException
 import timber.log.Timber
@@ -12,7 +14,9 @@ import javax.inject.Singleton
  * Passwords are stored as CharArray for best-effort zeroing on clear.
  */
 @Singleton
-class PasswordAuthStrategy @Inject constructor() : AuthStrategy {
+class PasswordAuthStrategy @Inject constructor(
+    private val diagnosticsStore: SessionDiagnosticsStore
+) : AuthStrategy {
 
     private val passwordCache = ConcurrentHashMap<String, CharArray>()
 
@@ -27,11 +31,29 @@ class PasswordAuthStrategy @Inject constructor() : AuthStrategy {
         return try {
             client.authPassword(config.getUsername(), String(passwordChars))
             client
-        } catch (_: UserAuthException) {
+        } catch (e: UserAuthException) {
             Timber.w("Password auth rejected for host %s", config.hostProfile.id)
+            diagnosticsStore.warn(
+                category = DiagnosticCategory.AUTH,
+                title = "Passwortauthentifizierung abgelehnt",
+                detail = "Benutzer: ${config.getUsername()}",
+                throwable = e,
+                sessionId = config.hostProfile.id,
+                hostId = config.hostProfile.id,
+                hostName = config.hostProfile.getDisplayName()
+            )
             null
         } catch (e: Exception) {
             Timber.w(e, "Password auth I/O error for host %s", config.hostProfile.id)
+            diagnosticsStore.error(
+                category = DiagnosticCategory.AUTH,
+                title = "Passwortauthentifizierung fehlgeschlagen",
+                detail = "Benutzer: ${config.getUsername()}",
+                throwable = e,
+                sessionId = config.hostProfile.id,
+                hostId = config.hostProfile.id,
+                hostName = config.hostProfile.getDisplayName()
+            )
             null
         }
     }

@@ -29,6 +29,12 @@ class SessionNotificationFactory @Inject constructor(
         const val ACTION_START_SESSION = "com.example.privatessh.action.START_SESSION"
         const val ACTION_RECONNECT = "com.example.privatessh.action.RECONNECT"
         const val ACTION_DISCONNECT = "com.example.privatessh.action.DISCONNECT"
+        const val ACTION_EXTEND_GRACE = "com.example.privatessh.action.EXTEND_GRACE"
+
+        private const val REQ_OPEN_APP = 1010
+        private const val REQ_RECONNECT = 1011
+        private const val REQ_DISCONNECT = 1012
+        private const val REQ_EXTEND = 1013
     }
 
     private val notificationManager =
@@ -51,6 +57,11 @@ class SessionNotificationFactory @Inject constructor(
             .setOnlyAlertOnce(true)
             .setContentIntent(createOpenAppIntent(sessionId))
             .addAction(
+                android.R.drawable.ic_menu_view,
+                context.getString(R.string.notification_action_return),
+                createOpenAppIntent(sessionId)
+            )
+            .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 context.getString(R.string.notification_action_disconnect),
                 createServiceAction(ACTION_DISCONNECT, sessionId)
@@ -63,12 +74,17 @@ class SessionNotificationFactory @Inject constructor(
         reason: String?
     ): Notification =
         NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("Reconnecting SSH session")
+            .setContentTitle(context.getString(R.string.notification_reconnecting_title))
             .setContentText(reason ?: hostName)
             .setSmallIcon(android.R.drawable.ic_popup_sync)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(createOpenAppIntent(sessionId))
+            .addAction(
+                android.R.drawable.ic_menu_view,
+                context.getString(R.string.notification_action_return),
+                createOpenAppIntent(sessionId)
+            )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 context.getString(R.string.notification_action_disconnect),
@@ -83,12 +99,12 @@ class SessionNotificationFactory @Inject constructor(
         sessionDetail: String? = null
     ): Notification =
         NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("SSH session in grace period")
+            .setContentTitle(context.getString(R.string.notification_grace_title))
             .setContentText(
                 buildString {
                     append(hostName)
                     append(" · ")
-                    append("$minutesRemaining min remaining")
+                    append(context.getString(R.string.notification_grace_remaining, minutesRemaining))
                     sessionDetail?.let {
                         append(" · ")
                         append(it)
@@ -99,6 +115,21 @@ class SessionNotificationFactory @Inject constructor(
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(createOpenAppIntent(sessionId))
+            .addAction(
+                android.R.drawable.ic_menu_view,
+                context.getString(R.string.notification_action_return),
+                createOpenAppIntent(sessionId)
+            )
+            .addAction(
+                android.R.drawable.ic_menu_recent_history,
+                context.getString(R.string.notification_action_extend_grace),
+                createServiceAction(ACTION_EXTEND_GRACE, sessionId)
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                context.getString(R.string.notification_action_disconnect),
+                createServiceAction(ACTION_DISCONNECT, sessionId)
+            )
             .build()
 
     fun createDisconnectedNotification(
@@ -108,16 +139,21 @@ class SessionNotificationFactory @Inject constructor(
         canReconnect: Boolean
     ): Notification {
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("SSH session disconnected")
+            .setContentTitle(context.getString(R.string.notification_disconnected_title))
             .setContentText(reason ?: hostName)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setOngoing(false)
             .setOnlyAlertOnce(true)
             .setContentIntent(createOpenAppIntent(sessionId))
+            .addAction(
+                android.R.drawable.ic_menu_view,
+                context.getString(R.string.notification_action_return),
+                createOpenAppIntent(sessionId)
+            )
         if (canReconnect) {
             builder.addAction(
                 android.R.drawable.ic_menu_rotate,
-                "Reconnect",
+                context.getString(R.string.notification_action_reconnect),
                 createServiceAction(ACTION_RECONNECT, sessionId)
             )
         }
@@ -153,7 +189,7 @@ class SessionNotificationFactory @Inject constructor(
         }
         return PendingIntent.getActivity(
             context,
-            sessionId?.hashCode() ?: 0,
+            REQ_OPEN_APP,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -164,9 +200,15 @@ class SessionNotificationFactory @Inject constructor(
             this.action = action
             putExtra("session_id", sessionId)
         }
+        val requestCode = when (action) {
+            ACTION_RECONNECT -> REQ_RECONNECT
+            ACTION_DISCONNECT -> REQ_DISCONNECT
+            ACTION_EXTEND_GRACE -> REQ_EXTEND
+            else -> REQ_OPEN_APP
+        }
         return PendingIntent.getService(
             context,
-            action.hashCode(),
+            requestCode,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

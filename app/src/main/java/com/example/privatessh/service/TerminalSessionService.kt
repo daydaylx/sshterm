@@ -3,6 +3,10 @@ package com.example.privatessh.service
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import com.example.privatessh.R
+import com.example.privatessh.core.constants.Defaults
+import com.example.privatessh.diagnostics.DiagnosticCategory
+import com.example.privatessh.diagnostics.SessionDiagnosticsStore
 import com.example.privatessh.domain.model.AuthType
 import com.example.privatessh.domain.model.SessionPolicy
 import com.example.privatessh.domain.repository.SettingsRepository
@@ -14,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -23,6 +28,10 @@ import javax.inject.Inject
  */
 @AndroidEntryPoint
 class TerminalSessionService : Service() {
+
+    companion object {
+        private const val GRACE_EXTENSION_MINUTES = 10
+    }
 
     @Inject
     lateinit var sessionRegistry: SessionRegistry
@@ -39,12 +48,21 @@ class TerminalSessionService : Service() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var diagnosticsStore: SessionDiagnosticsStore
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var autoReconnectEnabled: Boolean = true
     private var currentSessionPolicy: SessionPolicy = SessionPolicy()
+    private var reconnectAttempts: Int = 0
 
     override fun onCreate() {
         super.onCreate()
+        diagnosticsStore.info(
+            category = DiagnosticCategory.SERVICE,
+            title = "Terminal-Service erstellt",
+            detail = "Der Foreground-Service für SSH-Sitzungen wurde gestartet."
+        )
         observeSettings()
         observeGracePeriod()
         observeEngineState()
@@ -57,6 +75,7 @@ class TerminalSessionService : Service() {
         when (intent?.action) {
             SessionNotificationFactory.ACTION_RECONNECT -> serviceScope.launch { handleReconnect(manual = true) }
             SessionNotificationFactory.ACTION_DISCONNECT -> handleDisconnect()
+            SessionNotificationFactory.ACTION_EXTEND_GRACE -> extendGracePeriod()
             SessionNotificationFactory.ACTION_START_SESSION, null -> {
                 val sessionId = intent?.getStringExtra("session_id")
                 val hostName = intent?.getStringExtra("host_name")
@@ -81,6 +100,12 @@ class TerminalSessionService : Service() {
     }
 
     override fun onDestroy() {
+        logInfo(
+            category = DiagnosticCategory.SERVICE,
+            title = "Terminal-Service beendet",
+            session = sessionRegistry.getActiveSession(),
+            detail = "Der Foreground-Service wurde gestoppt."
+        )
         super.onDestroy()
         graceController.stopGracePeriod()
         notificationFactory.cancelNotification()
@@ -89,6 +114,12 @@ class TerminalSessionService : Service() {
     }
 
     fun stopSession() {
+        logInfo(
+            category = DiagnosticCategory.SERVICE,
+            title = "Sitzung im Foreground-Service beendet",
+            session = sessionRegistry.getActiveSession(),
+            detail = "Notifications und Servicezustand werden zurückgesetzt."
+        )
         graceController.stopGracePeriod()
         notificationFactory.cancelNotification()
         sessionRegistry.clearAll()
@@ -97,9 +128,16 @@ class TerminalSessionService : Service() {
     }
 
     private suspend fun startSession(sessionId: String, hostName: String) {
+        reconnectAttempts = 0
         graceController.stopGracePeriod()
         val activeSession = buildActiveSession(sessionId, hostName)
         sessionRegistry.registerSession(activeSession)
+        logInfo(
+            category = DiagnosticCategory.SERVICE,
+            title = "Sitzung beim Foreground-Service registriert",
+            session = activeSession,
+            detail = "Session-ID: ${activeSession.sessionId}"
+        )
         startForeground(
             SessionNotificationFactory.NOTIFICATION_ID,
             notificationFactory.createSessionNotification(
@@ -120,10 +158,22 @@ class TerminalSessionService : Service() {
             privateKeyAvailable = capability.privateKeyAvailable
         )
         sessionRegistry.updateSession(refreshedSession)
+        logInfo(
+            category = DiagnosticCategory.SERVICE,
+            title = if (manual) "Manueller Reconnect angefordert" else "Automatischer Reconnect angefordert",
+            session = refreshedSession,
+            detail = capability.reason ?: "Reconnect-Voraussetzungen erfüllt."
+        )
 
         if (!capability.isAllowed) {
-            val reason = capability.reason ?: "Reconnect is not available."
+            val reason = capability.reason ?: getString(R.string.service_reconnect_unavailable)
             sessionRegistry.markFailed(reason)
+            logError(
+                category = DiagnosticCategory.SERVICE,
+                title = "Reconnect nicht verfügbar",
+                session = refreshedSession,
+                detail = reason
+            )
             notificationFactory.updateNotification(
                 notificationFactory.createDisconnectedNotification(
                     hostName = refreshedSession.hostName,
@@ -136,11 +186,17 @@ class TerminalSessionService : Service() {
         }
 
         val statusMessage = if (manual) {
-            "Reconnect requested"
+            getString(R.string.service_reconnect_requested)
         } else {
-            sessionEngine.error.value ?: "Connection lost, reconnecting"
+            sessionEngine.error.value ?: getString(R.string.service_connection_lost_reconnecting)
         }
         sessionRegistry.markReconnecting(statusMessage)
+        logWarning(
+            category = DiagnosticCategory.SERVICE,
+            title = "Reconnect läuft",
+            session = refreshedSession,
+            detail = statusMessage
+        )
         startForeground(
             SessionNotificationFactory.NOTIFICATION_ID,
             notificationFactory.createReconnectingNotification(
@@ -153,11 +209,18 @@ class TerminalSessionService : Service() {
         serviceScope.launch {
             val reconnected = sessionEngine.reconnectLast(currentSessionPolicy)
             if (reconnected) {
+                reconnectAttempts = 0
                 val connectedSession = buildActiveSession(
                     sessionId = refreshedSession.sessionId,
                     fallbackHostName = refreshedSession.hostName
                 )
                 sessionRegistry.registerSession(connectedSession)
+                logInfo(
+                    category = DiagnosticCategory.SERVICE,
+                    title = "Reconnect erfolgreich",
+                    session = connectedSession,
+                    detail = "Die Sitzung wurde nach Unterbrechung wiederhergestellt."
+                )
                 notificationFactory.updateNotification(
                     notificationFactory.createSessionNotification(
                         hostName = connectedSession.hostName,
@@ -172,9 +235,15 @@ class TerminalSessionService : Service() {
                     passwordCached = failedCapability.passwordCached,
                     privateKeyAvailable = failedCapability.privateKeyAvailable
                 )
-                val reason = sessionEngine.error.value ?: "Reconnect failed"
+                val reason = sessionEngine.error.value ?: getString(R.string.service_reconnect_failed)
                 sessionRegistry.updateSession(failedSession)
                 sessionRegistry.markFailed(reason)
+                logError(
+                    category = DiagnosticCategory.SERVICE,
+                    title = "Reconnect fehlgeschlagen",
+                    session = failedSession,
+                    detail = reason
+                )
                 notificationFactory.updateNotification(
                     notificationFactory.createDisconnectedNotification(
                         hostName = failedSession.hostName,
@@ -189,10 +258,41 @@ class TerminalSessionService : Service() {
 
     private fun handleDisconnect() {
         sessionRegistry.markDisconnecting()
+        logInfo(
+            category = DiagnosticCategory.SERVICE,
+            title = "Disconnect über Service ausgelöst",
+            session = sessionRegistry.getActiveSession(),
+            detail = "Die Sitzung wird kontrolliert beendet."
+        )
         serviceScope.launch {
             sessionEngine.disconnect()
             stopSession()
         }
+    }
+
+    private fun extendGracePeriod() {
+        val activeSession = sessionRegistry.getActiveSession() ?: return
+        if (!graceController.isActive()) return
+
+        graceController.extendGracePeriod(
+            additionalMinutes = GRACE_EXTENSION_MINUTES,
+            maxMinutes = SessionPolicy.GRACE_PERIOD_MAX
+        )
+        logInfo(
+            category = DiagnosticCategory.SERVICE,
+            title = "Nachlaufzeit verlängert",
+            session = activeSession,
+            detail = "Zusätzliche Minuten: $GRACE_EXTENSION_MINUTES"
+        )
+
+        notificationFactory.updateNotification(
+            notificationFactory.createGracePeriodNotification(
+                hostName = activeSession.hostName,
+                sessionId = activeSession.sessionId,
+                minutesRemaining = graceController.getRemainingMinutes(),
+                sessionDetail = activeSession.shellStatus
+            )
+        )
     }
 
     private fun observeSettings() {
@@ -213,6 +313,12 @@ class TerminalSessionService : Service() {
                     SessionGraceController.GraceState.Inactive -> {
                         if (sessionRegistry.runtimeState.value.lifecycleState == SessionLifecycleState.GRACE) {
                             sessionRegistry.markConnected()
+                            logInfo(
+                                category = DiagnosticCategory.SERVICE,
+                                title = "Nachlaufzeit beendet",
+                                session = activeSession,
+                                detail = "Die Sitzung ist wieder im normalen Verbunden-Zustand."
+                            )
                             notificationFactory.updateNotification(
                                 notificationFactory.createSessionNotification(
                                     hostName = activeSession.hostName,
@@ -225,6 +331,12 @@ class TerminalSessionService : Service() {
 
                     is SessionGraceController.GraceState.Active -> {
                         sessionRegistry.markGracePeriod(state.minutesRemaining)
+                        logWarning(
+                            category = DiagnosticCategory.SERVICE,
+                            title = "Nachlaufzeit aktiv",
+                            session = activeSession,
+                            detail = "Verbleibende Minuten: ${state.minutesRemaining}"
+                        )
                         notificationFactory.updateNotification(
                             notificationFactory.createGracePeriodNotification(
                                 hostName = activeSession.hostName,
@@ -274,11 +386,28 @@ class TerminalSessionService : Service() {
                         ) {
                             return@collectLatest
                         }
-                        val reason = sessionEngine.error.value ?: "SSH session failed"
-                        if (autoReconnectEnabled) {
+                        val reason = sessionEngine.error.value ?: getString(R.string.service_session_failed)
+                        if (autoReconnectEnabled && reconnectAttempts < Defaults.RECONNECT_MAX_ATTEMPTS) {
+                            val backoffMs = (Defaults.RECONNECT_INITIAL_DELAY_MS * (1L shl reconnectAttempts))
+                                .coerceAtMost(Defaults.RECONNECT_MAX_DELAY_MS)
+                            reconnectAttempts++
+                            logWarning(
+                                category = DiagnosticCategory.SERVICE,
+                                title = "Automatischer Reconnect geplant",
+                                session = activeSession,
+                                detail = "Versuch $reconnectAttempts mit Backoff ${backoffMs} ms.\nGrund: $reason"
+                            )
+                            delay(backoffMs)
                             handleReconnect(manual = false)
                         } else {
+                            reconnectAttempts = 0
                             sessionRegistry.markFailed(reason)
+                            logError(
+                                category = DiagnosticCategory.SERVICE,
+                                title = "Sitzung endgültig fehlgeschlagen",
+                                session = activeSession,
+                                detail = reason
+                            )
                             notificationFactory.updateNotification(
                                 notificationFactory.createDisconnectedNotification(
                                     hostName = activeSession.hostName,
@@ -355,6 +484,54 @@ class TerminalSessionService : Service() {
             privateKeyAvailable = capability.privateKeyAvailable,
             shellMode = shellStatus.mode,
             shellStatus = shellStatus.message
+        )
+    }
+
+    private fun logInfo(
+        category: DiagnosticCategory,
+        title: String,
+        session: ActiveSession? = null,
+        detail: String? = null
+    ) {
+        diagnosticsStore.info(
+            category = category,
+            title = title,
+            detail = detail,
+            sessionId = session?.sessionId,
+            hostId = session?.hostId,
+            hostName = session?.hostName
+        )
+    }
+
+    private fun logWarning(
+        category: DiagnosticCategory,
+        title: String,
+        session: ActiveSession? = null,
+        detail: String? = null
+    ) {
+        diagnosticsStore.warn(
+            category = category,
+            title = title,
+            detail = detail,
+            sessionId = session?.sessionId,
+            hostId = session?.hostId,
+            hostName = session?.hostName
+        )
+    }
+
+    private fun logError(
+        category: DiagnosticCategory,
+        title: String,
+        session: ActiveSession? = null,
+        detail: String? = null
+    ) {
+        diagnosticsStore.error(
+            category = category,
+            title = title,
+            detail = detail,
+            sessionId = session?.sessionId,
+            hostId = session?.hostId,
+            hostName = session?.hostName
         )
     }
 }

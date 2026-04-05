@@ -1,5 +1,7 @@
 package com.example.privatessh.ssh.hostkey
 
+import com.example.privatessh.diagnostics.DiagnosticCategory
+import com.example.privatessh.diagnostics.SessionDiagnosticsStore
 import com.example.privatessh.domain.model.KnownHostEntry
 import com.example.privatessh.domain.repository.KnownHostRepository
 import kotlinx.coroutines.runBlocking
@@ -15,22 +17,35 @@ import net.schmizz.sshj.transport.verification.HostKeyVerifier
  */
 @Singleton
 class HostKeyVerifierAdapter @Inject constructor(
-    private val knownHostRepository: KnownHostRepository
+    private val knownHostRepository: KnownHostRepository,
+    private val diagnosticsStore: SessionDiagnosticsStore
 ) : HostKeyVerifier {
 
     @Volatile private var decisionProvider: (suspend (String, String) -> HostKeyDecision)? = null
     @Volatile private var allowOnlyKnownHosts: Boolean = false
+    @Volatile private var diagnosticSessionId: String? = null
+    @Volatile private var diagnosticHostId: String? = null
+    @Volatile private var diagnosticHostName: String? = null
 
     fun prepare(
         allowOnlyKnownHosts: Boolean = false,
+        sessionId: String? = null,
+        hostId: String? = null,
+        hostName: String? = null,
         decisionProvider: (suspend (String, String) -> HostKeyDecision)? = null
     ) {
         this.allowOnlyKnownHosts = allowOnlyKnownHosts
+        diagnosticSessionId = sessionId
+        diagnosticHostId = hostId
+        diagnosticHostName = hostName
         this.decisionProvider = decisionProvider
     }
 
     fun clear() {
         allowOnlyKnownHosts = false
+        diagnosticSessionId = null
+        diagnosticHostId = null
+        diagnosticHostName = null
         decisionProvider = null
     }
 
@@ -47,17 +62,51 @@ class HostKeyVerifierAdapter @Inject constructor(
         }
 
         if (existing != null && existing.fingerprint != fingerprint) {
+            diagnosticsStore.error(
+                category = DiagnosticCategory.HOST_KEY,
+                title = "Host-Schlüssel hat sich geändert",
+                detail = "Host: $host\nGespeichert: ${existing.fingerprint}\nEmpfangen: $fingerprint",
+                sessionId = diagnosticSessionId,
+                hostId = diagnosticHostId,
+                hostName = diagnosticHostName ?: host
+            )
             return false
         }
 
         if (allowOnlyKnownHosts) {
+            diagnosticsStore.warn(
+                category = DiagnosticCategory.HOST_KEY,
+                title = "Unbekannter Host-Schlüssel im Reconnect blockiert",
+                detail = "Host: $host\nFingerprint: $fingerprint",
+                sessionId = diagnosticSessionId,
+                hostId = diagnosticHostId,
+                hostName = diagnosticHostName ?: host
+            )
             return false
         }
 
+        diagnosticsStore.warn(
+            category = DiagnosticCategory.HOST_KEY,
+            title = "Unbekannter Host-Schlüssel erfordert Bestätigung",
+            detail = "Host: $host\nAlgorithmus: $algorithm\nFingerprint: $fingerprint",
+            sessionId = diagnosticSessionId,
+            hostId = diagnosticHostId,
+            hostName = diagnosticHostName ?: host
+        )
         val decision = try {
             decisionProvider?.let { provider -> runBlocking { provider(algorithm, fingerprint) } }
                 ?: HostKeyDecision.Reject
-        } catch (_: Exception) { HostKeyDecision.Reject }
+        } catch (e: Exception) {
+            diagnosticsStore.error(
+                category = DiagnosticCategory.HOST_KEY,
+                title = "Host-Key-Entscheidung fehlgeschlagen",
+                throwable = e,
+                sessionId = diagnosticSessionId,
+                hostId = diagnosticHostId,
+                hostName = diagnosticHostName ?: host
+            )
+            HostKeyDecision.Reject
+        }
 
         return when (decision) {
             is HostKeyDecision.TrustAlways -> {
@@ -68,11 +117,49 @@ class HostKeyVerifierAdapter @Inject constructor(
                         )
                     }
                 } catch (_: Exception) { }
+                diagnosticsStore.info(
+                    category = DiagnosticCategory.HOST_KEY,
+                    title = "Host-Schlüssel dauerhaft vertraut",
+                    detail = "Host: $host\nFingerprint: $fingerprint",
+                    sessionId = diagnosticSessionId,
+                    hostId = diagnosticHostId,
+                    hostName = diagnosticHostName ?: host
+                )
                 true
             }
-            is HostKeyDecision.TrustOnce -> true
-            HostKeyDecision.Reject -> false
-            is HostKeyDecision.KeyChanged -> false
+            is HostKeyDecision.TrustOnce -> {
+                diagnosticsStore.info(
+                    category = DiagnosticCategory.HOST_KEY,
+                    title = "Host-Schlüssel einmalig akzeptiert",
+                    detail = "Host: $host\nFingerprint: $fingerprint",
+                    sessionId = diagnosticSessionId,
+                    hostId = diagnosticHostId,
+                    hostName = diagnosticHostName ?: host
+                )
+                true
+            }
+            HostKeyDecision.Reject -> {
+                diagnosticsStore.warn(
+                    category = DiagnosticCategory.HOST_KEY,
+                    title = "Host-Schlüssel abgelehnt",
+                    detail = "Host: $host\nFingerprint: $fingerprint",
+                    sessionId = diagnosticSessionId,
+                    hostId = diagnosticHostId,
+                    hostName = diagnosticHostName ?: host
+                )
+                false
+            }
+            is HostKeyDecision.KeyChanged -> {
+                diagnosticsStore.error(
+                    category = DiagnosticCategory.HOST_KEY,
+                    title = "Host-Schlüssel stimmt nicht mehr überein",
+                    detail = "Alt: ${decision.oldFingerprint}\nNeu: ${decision.newFingerprint}",
+                    sessionId = diagnosticSessionId,
+                    hostId = diagnosticHostId,
+                    hostName = diagnosticHostName ?: host
+                )
+                false
+            }
         }
     }
 

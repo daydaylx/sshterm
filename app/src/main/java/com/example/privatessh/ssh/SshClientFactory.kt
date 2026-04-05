@@ -2,6 +2,7 @@ package com.example.privatessh.ssh
 
 import com.example.privatessh.domain.model.HostProfile
 import net.schmizz.sshj.SSHClient
+import net.schmizz.sshj.common.SecurityUtils
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,6 +19,7 @@ class SshClientFactory @Inject constructor(
      */
     fun createClient(hostProfile: HostProfile): SSHClient {
         return try {
+            SecurityUtils.setRegisterBouncyCastle(false)
             val client = SSHClient()
             client.setConnectTimeout(15_000)
             client.setTimeout(30_000)

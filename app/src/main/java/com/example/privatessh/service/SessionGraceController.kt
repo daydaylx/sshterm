@@ -33,6 +33,8 @@ class SessionGraceController @Inject constructor(
     val state: StateFlow<GraceState> = _state.asStateFlow()
 
     private var graceJob: Job? = null
+    @Volatile
+    private var remainingMinutes: Int = 0
 
     /**
      * Default grace period duration in minutes.
@@ -44,14 +46,14 @@ class SessionGraceController @Inject constructor(
      */
     fun startGracePeriod(scope: CoroutineScope, onGraceExpired: () -> Unit) {
         graceJob?.cancel()
-        var minutesRemaining = gracePeriodMinutes
-        _state.value = GraceState.Active(minutesRemaining)
+        remainingMinutes = gracePeriodMinutes
+        _state.value = GraceState.Active(remainingMinutes)
 
         graceJob = scope.launch {
-            while (minutesRemaining > 0) {
+            while (remainingMinutes > 0) {
                 delay(60_000) // Wait 1 minute
-                minutesRemaining--
-                _state.value = GraceState.Active(minutesRemaining)
+                remainingMinutes--
+                _state.value = GraceState.Active(remainingMinutes)
             }
             _state.value = GraceState.Expired
             onGraceExpired()
@@ -64,16 +66,21 @@ class SessionGraceController @Inject constructor(
     fun stopGracePeriod() {
         graceJob?.cancel()
         graceJob = null
+        remainingMinutes = 0
         _state.value = GraceState.Inactive
     }
 
     /**
      * Extends the grace period by the specified minutes.
      */
-    fun extendGracePeriod(additionalMinutes: Int) {
+    fun extendGracePeriod(additionalMinutes: Int, maxMinutes: Int = Int.MAX_VALUE) {
+        if (additionalMinutes <= 0) return
+
         _state.update { current ->
             if (current is GraceState.Active) {
-                GraceState.Active(current.minutesRemaining + additionalMinutes)
+                remainingMinutes = (current.minutesRemaining + additionalMinutes)
+                    .coerceAtMost(maxMinutes)
+                GraceState.Active(remainingMinutes)
             } else current
         }
     }
@@ -89,11 +96,6 @@ class SessionGraceController @Inject constructor(
      * Returns the remaining minutes in grace period.
      */
     fun getRemainingMinutes(): Int {
-        val state = _state.value
-        return if (state is GraceState.Active) {
-            state.minutesRemaining
-        } else {
-            0
-        }
+        return (_state.value as? GraceState.Active)?.minutesRemaining ?: 0
     }
 }

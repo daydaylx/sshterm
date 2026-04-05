@@ -6,8 +6,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
@@ -42,12 +40,10 @@ class MainActivity : AppCompatActivity() {
                         pendingTerminalRoute.value = null
                     }
                 }
-                Scaffold(modifier = Modifier.fillMaxSize()) { paddingValues ->
-                    AppNavHost(
-                        navController = navController,
-                        modifier = Modifier.padding(paddingValues)
-                    )
-                }
+                AppNavHost(
+                    navController = navController,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
     }

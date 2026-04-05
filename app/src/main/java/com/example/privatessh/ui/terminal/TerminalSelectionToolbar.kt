@@ -1,6 +1,5 @@
 package com.example.privatessh.ui.terminal
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,18 +8,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.privatessh.R
 
-/**
- * Toolbar for terminal selection and copy/paste operations.
- */
 @Composable
 fun TerminalSelectionToolbar(
     hasSelection: Boolean,
@@ -30,35 +29,52 @@ fun TerminalSelectionToolbar(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        shape = MaterialTheme.shapes.medium
     ) {
-        Text(
-            text = if (hasSelection) {
-                "${selectedText.length} chars selected"
-            } else {
-                "Long-press the terminal to select text"
-            },
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (hasSelection) {
+                    stringResource(R.string.terminal_selection_count, selectedText.length)
+                } else {
+                    stringResource(R.string.terminal_selection_hint)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
 
-        if (hasSelection) {
-            IconButton(onClick = onCopy) {
-                Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
-            }
-            IconButton(onClick = onCancel) {
-                Icon(Icons.Default.Close, contentDescription = "Cancel selection")
-            }
-        }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (hasSelection) {
+                    FilledTonalIconButton(onClick = onCopy) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = stringResource(R.string.terminal_copy)
+                        )
+                    }
+                    FilledTonalIconButton(onClick = onCancel) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.terminal_cancel_selection)
+                        )
+                    }
+                }
 
-        IconButton(onClick = onPaste) {
-            Icon(Icons.Default.ContentPaste, contentDescription = "Paste")
+                FilledTonalIconButton(onClick = onPaste) {
+                    Icon(
+                        imageVector = Icons.Default.ContentPaste,
+                        contentDescription = stringResource(R.string.terminal_paste)
+                    )
+                }
+            }
         }
     }
 }

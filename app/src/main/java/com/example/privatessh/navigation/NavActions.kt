@@ -9,4 +9,5 @@ sealed class NavAction(val route: String) {
     data class HostEdit(val hostId: String) : NavAction(AppRoutes.hostEdit(hostId))
     data class Terminal(val hostId: String) : NavAction(AppRoutes.terminal(hostId))
     data object Settings : NavAction(AppRoutes.SETTINGS)
+    data object Diagnostics : NavAction(AppRoutes.DIAGNOSTICS)
 }

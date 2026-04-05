@@ -52,6 +52,9 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+            excludes += "META-INF/INDEX.LIST"
+            excludes += "META-INF/BC*.SF"
+            excludes += "META-INF/BC*.DSA"
         }
     }
 }
@@ -86,6 +89,7 @@ dependencies {
 
     // SSHJ
     implementation("com.hierynomus:sshj:0.39.0")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
@@ -109,6 +113,7 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.05.00"))

@@ -9,6 +9,7 @@ object AppRoutes {
     const val HOST_CREATE = "host_create"
     const val TERMINAL = "terminal"
     const val SETTINGS = "settings"
+    const val DIAGNOSTICS = "diagnostics"
 
     // Arguments
     const val HOST_ID_ARG = "hostId"

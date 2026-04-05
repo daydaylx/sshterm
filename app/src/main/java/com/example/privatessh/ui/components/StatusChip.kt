@@ -1,5 +1,6 @@
 package com.example.privatessh.ui.components
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -8,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.BorderStroke
 
 /**
  * A chip displaying connection status.
@@ -21,11 +23,12 @@ fun StatusChip(
     Surface(
         modifier = modifier,
         color = color.copy(alpha = 0.1f),
-        shape = MaterialTheme.shapes.small
+        shape = MaterialTheme.shapes.small,
+        border = BorderStroke(1.dp, color.copy(alpha = 0.24f))
     ) {
         Text(
             text = text,
-            modifier = Modifier,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
             style = MaterialTheme.typography.labelSmall,
             color = color,
             maxLines = 1,

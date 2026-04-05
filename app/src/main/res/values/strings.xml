@@ -299,4 +299,14 @@
     <string name="diag_cat_service">Service</string>
     <string name="diag_cat_ui">UI</string>
 
+    <!-- Host List Groups -->
+    <string name="host_group_recent">Zuletzt verbunden</string>
+    <string name="host_group_tailscale">Tailscale-Ziele</string>
+    <string name="host_group_direct">Direkte Verbindungen</string>
+    <string name="host_group_other">Alle Server</string>
+
+    <!-- Swipe Actions -->
+    <string name="swipe_connect">Verbinden</string>
+    <string name="swipe_delete">Löschen</string>
+
 </resources>

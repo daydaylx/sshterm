@@ -3,6 +3,10 @@ package com.example.privatessh.presentation.terminal
 import android.view.KeyEvent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.privatessh.diagnostics.DiagnosticCategory
+import com.example.privatessh.diagnostics.DiagnosticEvent
+import com.example.privatessh.diagnostics.DiagnosticLevel
+import com.example.privatessh.diagnostics.SessionDiagnosticsStore
 import com.example.privatessh.domain.model.AuthType
 import com.example.privatessh.domain.model.HostProfile
 import com.example.privatessh.domain.usecase.host.GetHostByIdUseCase
@@ -42,7 +46,8 @@ class TerminalViewModel @Inject constructor(
     private val getSettingsUseCase: GetSettingsUseCase,
     private val sessionRegistry: SessionRegistry,
     private val passwordAuthStrategy: PasswordAuthStrategy,
-    private val privateKeyAuthStrategy: PrivateKeyAuthStrategy
+    private val privateKeyAuthStrategy: PrivateKeyAuthStrategy,
+    private val diagnosticsStore: SessionDiagnosticsStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TerminalUiState())
@@ -54,6 +59,8 @@ class TerminalViewModel @Inject constructor(
     @Volatile private var currentHost: HostProfile? = null
     @Volatile private var pendingHostKeyDecision: CompletableDeferred<HostKeyDecision>? = null
     @Volatile private var pendingBiometricAuth: CompletableDeferred<Boolean>? = null
+    private var connectJob: kotlinx.coroutines.Job? = null
+    private var latestDiagnostics: List<DiagnosticEvent> = emptyList()
 
     init {
         viewModelScope.launch {
@@ -89,7 +96,11 @@ class TerminalViewModel @Inject constructor(
         }
         viewModelScope.launch {
             observeSessionUseCase.observeCurrentHost().collect { host ->
+                if (host != null) {
+                    currentHost = host
+                }
                 _uiState.value = _uiState.value.copy(hostName = host?.getDisplayName().orEmpty())
+                updateDiagnosticsState()
             }
         }
         viewModelScope.launch {
@@ -119,11 +130,18 @@ class TerminalViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(biometricAuthEnabled = enabled)
             }
         }
+        viewModelScope.launch {
+            diagnosticsStore.events.collect { events ->
+                latestDiagnostics = events
+                updateDiagnosticsState()
+            }
+        }
         updateModifierStates()
     }
 
     fun connect(hostId: String) {
-        viewModelScope.launch {
+        connectJob?.cancel()
+        connectJob = viewModelScope.launch {
             val activeHost = observeSessionUseCase.getCurrentHost()
             val currentState = observeSessionUseCase.getCurrentState()
             if (
@@ -137,21 +155,42 @@ class TerminalViewModel @Inject constructor(
             ) {
                 currentHost = activeHost
                 _uiState.value = _uiState.value.copy(hostName = activeHost.getDisplayName(), error = null)
+                logInfo(
+                    category = DiagnosticCategory.UI,
+                    title = "Bereits aktive Sitzung wiederverwendet",
+                    host = activeHost,
+                    detail = "Die bestehende Terminal-Sitzung wird weiter verwendet."
+                )
+                updateDiagnosticsState()
                 return@launch
             }
 
             val host = getHostByIdUseCase(hostId)
             if (host == null) {
+                diagnosticsStore.error(
+                    category = DiagnosticCategory.UI,
+                    title = "Host zum Verbinden nicht gefunden",
+                    detail = "Host-ID: $hostId",
+                    sessionId = hostId,
+                    hostId = hostId
+                )
                 _effect.trySend(TerminalUiEffect.ShowConnectionError("Host not found"))
                 return@launch
             }
 
             currentHost = host
             _uiState.value = _uiState.value.copy(hostName = host.getDisplayName(), error = null)
+            updateDiagnosticsState()
 
             if (_uiState.value.biometricAuthEnabled) {
                 val granted = waitForBiometricAuth()
                 if (!granted) {
+                    logWarning(
+                        category = DiagnosticCategory.UI,
+                        title = "Biometrische Freigabe abgelehnt",
+                        host = host,
+                        detail = "Die Verbindung wurde vor dem SSH-Aufbau abgebrochen."
+                    )
                     _effect.trySend(TerminalUiEffect.ShowConnectionError("Biometric authentication denied"))
                     return@launch
                 }
@@ -160,12 +199,24 @@ class TerminalViewModel @Inject constructor(
             when (host.authType) {
                 AuthType.PASSWORD -> {
                     if (!passwordAuthStrategy.hasPassword(host.id)) {
+                        logWarning(
+                            category = DiagnosticCategory.AUTH,
+                            title = "Passwort wird vom Benutzer angefordert",
+                            host = host,
+                            detail = "Es ist kein Passwort im Arbeitsspeicher vorhanden."
+                        )
                         _uiState.value = _uiState.value.copy(isAwaitingPassword = true)
                         return@launch
                     }
                 }
                 AuthType.PRIVATE_KEY -> {
                     if (!privateKeyAuthStrategy.hasPrivateKey(host.id)) {
+                        logError(
+                            category = DiagnosticCategory.AUTH,
+                            title = "Privater Schlüssel fehlt",
+                            host = host,
+                            detail = "Für diesen Host ist kein gespeicherter Private Key verfügbar."
+                        )
                         _effect.trySend(TerminalUiEffect.ShowConnectionError("No private key stored for this host"))
                         return@launch
                     }
@@ -179,16 +230,52 @@ class TerminalViewModel @Inject constructor(
     fun submitPassword(password: String) {
         val host = currentHost ?: return
         passwordAuthStrategy.setPassword(host.id, password)
+        logInfo(
+            category = DiagnosticCategory.AUTH,
+            title = "Passwort übernommen",
+            host = host,
+            detail = "Die Verbindung wird mit dem eingegebenen Passwort gestartet."
+        )
         _uiState.value = _uiState.value.copy(isAwaitingPassword = false)
         connectCurrentHost()
     }
 
     fun cancelPasswordPrompt() {
+        logWarning(
+            category = DiagnosticCategory.AUTH,
+            title = "Passwortdialog abgebrochen",
+            host = currentHost,
+            detail = "Die Verbindung wurde ohne Passwort beendet."
+        )
         _uiState.value = _uiState.value.copy(isAwaitingPassword = false)
-        _effect.trySend(TerminalUiEffect.NavigateBack)
     }
 
     fun onHostKeyDecision(decision: HostKeyDecision) {
+        when (decision) {
+            is HostKeyDecision.TrustAlways -> logInfo(
+                category = DiagnosticCategory.HOST_KEY,
+                title = "Host-Schlüssel dauerhaft bestätigt",
+                host = currentHost,
+                detail = decision.fingerprint
+            )
+            is HostKeyDecision.TrustOnce -> logInfo(
+                category = DiagnosticCategory.HOST_KEY,
+                title = "Host-Schlüssel einmalig bestätigt",
+                host = currentHost,
+                detail = decision.fingerprint
+            )
+            HostKeyDecision.Reject -> logWarning(
+                category = DiagnosticCategory.HOST_KEY,
+                title = "Host-Schlüssel abgelehnt",
+                host = currentHost
+            )
+            is HostKeyDecision.KeyChanged -> logError(
+                category = DiagnosticCategory.HOST_KEY,
+                title = "Host-Schlüssel-Konflikt gemeldet",
+                host = currentHost,
+                detail = "Alt: ${decision.oldFingerprint}\nNeu: ${decision.newFingerprint}"
+            )
+        }
         pendingHostKeyDecision?.complete(decision)
         pendingHostKeyDecision = null
         _uiState.value = _uiState.value.copy(hostKeyPrompt = null)
@@ -309,6 +396,12 @@ class TerminalViewModel @Inject constructor(
             )
             _uiState.value = _uiState.value.copy(isLoading = false)
             if (!success) {
+                logError(
+                    category = DiagnosticCategory.UI,
+                    title = "Verbindungsaufbau fehlgeschlagen",
+                    host = host,
+                    detail = observeSessionUseCase.getCurrentError() ?: "Connection failed"
+                )
                 _effect.trySend(TerminalUiEffect.ShowConnectionError(
                     observeSessionUseCase.getCurrentError() ?: "Connection failed"
                 ))
@@ -329,6 +422,13 @@ class TerminalViewModel @Inject constructor(
             deferred.await()
         } catch (e: Exception) {
             Timber.w(e, "Biometric auth wait cancelled")
+            logWarning(
+                category = DiagnosticCategory.UI,
+                title = "Biometrische Authentifizierung abgebrochen",
+                host = currentHost,
+                detail = "Der Biometrie-Dialog wurde nicht erfolgreich abgeschlossen.",
+                throwable = e
+            )
             false
         }
     }
@@ -342,6 +442,12 @@ class TerminalViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             hostKeyPrompt = HostKeyPrompt(algorithm = algorithm, fingerprint = fingerprint)
         )
+        logWarning(
+            category = DiagnosticCategory.HOST_KEY,
+            title = "Host-Schlüssel wartet auf Benutzerentscheidung",
+            host = currentHost,
+            detail = "Algorithmus: $algorithm\nFingerprint: $fingerprint"
+        )
         return deferred.await()
     }
 
@@ -353,6 +459,72 @@ class TerminalViewModel @Inject constructor(
                 ModifierKey.ALT to inputController.getModifierState(ModifierKey.ALT),
                 ModifierKey.SHIFT to inputController.getModifierState(ModifierKey.SHIFT)
             )
+        )
+    }
+
+    private fun updateDiagnosticsState() {
+        val hostId = currentHost?.id ?: return
+        val visibleDiagnostics = latestDiagnostics
+            .filter { it.matches(hostId, hostId) }
+            .sortedByDescending { it.id }
+
+        _uiState.value = _uiState.value.copy(
+            diagnosticsCount = visibleDiagnostics.size,
+            latestDiagnosticError = visibleDiagnostics
+                .firstOrNull { it.level == DiagnosticLevel.ERROR }
+                ?.title
+        )
+    }
+
+    private fun logInfo(
+        category: DiagnosticCategory,
+        title: String,
+        host: HostProfile?,
+        detail: String? = null
+    ) {
+        diagnosticsStore.info(
+            category = category,
+            title = title,
+            detail = detail,
+            sessionId = host?.id,
+            hostId = host?.id,
+            hostName = host?.getDisplayName()
+        )
+    }
+
+    private fun logWarning(
+        category: DiagnosticCategory,
+        title: String,
+        host: HostProfile?,
+        detail: String? = null,
+        throwable: Throwable? = null
+    ) {
+        diagnosticsStore.warn(
+            category = category,
+            title = title,
+            detail = detail,
+            throwable = throwable,
+            sessionId = host?.id,
+            hostId = host?.id,
+            hostName = host?.getDisplayName()
+        )
+    }
+
+    private fun logError(
+        category: DiagnosticCategory,
+        title: String,
+        host: HostProfile?,
+        detail: String? = null,
+        throwable: Throwable? = null
+    ) {
+        diagnosticsStore.error(
+            category = category,
+            title = title,
+            detail = detail,
+            throwable = throwable,
+            sessionId = host?.id,
+            hostId = host?.id,
+            hostName = host?.getDisplayName()
         )
     }
 }

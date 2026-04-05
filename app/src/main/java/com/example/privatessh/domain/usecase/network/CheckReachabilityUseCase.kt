@@ -39,19 +39,6 @@ class CheckReachabilityUseCase @Inject constructor() {
             }
         }
     }
-
-    /**
-     * Checks if Tailscale daemon is running (for Tailscale targets).
-     */
-    suspend fun checkTailscaleRunning(): Boolean {
-        return try {
-            // Try to connect to Tailscale's local API
-            java.net.URL("http://100.100.100.100").openStream().close()
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
 }
 
 /**

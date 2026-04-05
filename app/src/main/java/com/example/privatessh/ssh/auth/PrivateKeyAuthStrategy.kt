@@ -1,5 +1,7 @@
 package com.example.privatessh.ssh.auth
 
+import com.example.privatessh.diagnostics.DiagnosticCategory
+import com.example.privatessh.diagnostics.SessionDiagnosticsStore
 import com.example.privatessh.domain.repository.SecureKeyRepository
 import com.example.privatessh.ssh.SshSessionConfig
 import kotlinx.coroutines.Dispatchers
@@ -12,7 +14,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class PrivateKeyAuthStrategy @Inject constructor(
-    private val secureKeyRepository: SecureKeyRepository
+    private val secureKeyRepository: SecureKeyRepository,
+    private val diagnosticsStore: SessionDiagnosticsStore
 ) : AuthStrategy {
 
     override suspend fun authenticate(
@@ -21,11 +24,30 @@ class PrivateKeyAuthStrategy @Inject constructor(
     ): net.schmizz.sshj.SSHClient? = withContext(Dispatchers.IO) {
         try {
             val keyAlias = aliasForHost(config.hostProfile.id)
-            val privateKeyPem = secureKeyRepository.getKey(keyAlias) ?: return@withContext null
+            val privateKeyPem = secureKeyRepository.getKey(keyAlias) ?: run {
+                diagnosticsStore.warn(
+                    category = DiagnosticCategory.AUTH,
+                    title = "Privater Schlüssel nicht gefunden",
+                    detail = "Kein Schlüssel für diesen Host im sicheren Speicher vorhanden.",
+                    sessionId = config.hostProfile.id,
+                    hostId = config.hostProfile.id,
+                    hostName = config.hostProfile.getDisplayName()
+                )
+                return@withContext null
+            }
             val keyProvider = client.loadKeys(privateKeyPem, null, null)
             client.authPublickey(config.getUsername(), keyProvider)
             client
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            diagnosticsStore.error(
+                category = DiagnosticCategory.AUTH,
+                title = "Private-Key-Authentifizierung fehlgeschlagen",
+                detail = "Benutzer: ${config.getUsername()}",
+                throwable = e,
+                sessionId = config.hostProfile.id,
+                hostId = config.hostProfile.id,
+                hostName = config.hostProfile.getDisplayName()
+            )
             null
         }
     }

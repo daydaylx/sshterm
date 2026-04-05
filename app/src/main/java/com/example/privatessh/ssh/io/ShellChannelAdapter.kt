@@ -1,5 +1,7 @@
 package com.example.privatessh.ssh.io
 
+import com.example.privatessh.diagnostics.DiagnosticCategory
+import com.example.privatessh.diagnostics.SessionDiagnosticsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.schmizz.sshj.SSHClient
@@ -12,7 +14,9 @@ import javax.inject.Singleton
  * Opens and manages the interactive shell channel for a session.
  */
 @Singleton
-class ShellChannelAdapter @Inject constructor() {
+class ShellChannelAdapter @Inject constructor(
+    private val diagnosticsStore: SessionDiagnosticsStore
+) {
 
     data class ShellHandle(
         val session: Session,
@@ -21,6 +25,9 @@ class ShellChannelAdapter @Inject constructor() {
 
     suspend fun openShellChannel(
         client: SSHClient,
+        sessionId: String? = null,
+        hostId: String? = null,
+        hostName: String? = null,
         terminalType: String = "xterm-256color",
         columns: Int = 80,
         rows: Int = 24
@@ -30,7 +37,16 @@ class ShellChannelAdapter @Inject constructor() {
             session.allocatePTY(terminalType, columns, rows, 0, 0, emptyMap())
             val shell = session.startShell()
             ShellHandle(session = session, shell = shell)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            diagnosticsStore.error(
+                category = DiagnosticCategory.SHELL,
+                title = "Interaktive Shell konnte nicht geöffnet werden",
+                detail = "PTY: $terminalType ${columns}x$rows",
+                throwable = e,
+                sessionId = sessionId,
+                hostId = hostId,
+                hostName = hostName
+            )
             null
         }
     }

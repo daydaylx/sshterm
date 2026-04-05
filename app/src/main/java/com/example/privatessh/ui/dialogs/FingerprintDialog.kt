@@ -10,7 +10,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.privatessh.R
 import com.example.privatessh.ssh.hostkey.HostKeyDecision
 
 /**
@@ -26,13 +28,13 @@ fun FingerprintDialog(
 ) {
     AlertDialog(
         onDismissRequest = { onDecision(HostKeyDecision.Reject) },
-        title = { Text("Unknown Host Key") },
+        title = { Text(stringResource(R.string.dialog_fingerprint_title)) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    "The authenticity of host '$hostName' can't be established."
+                    stringResource(R.string.dialog_fingerprint_intro, hostName)
                 )
                 Text(
                     algorithm,
@@ -46,7 +48,7 @@ fun FingerprintDialog(
                     modifier = Modifier.padding(top = 4.dp)
                 )
                 Text(
-                    "Are you sure you want to continue?",
+                    stringResource(R.string.dialog_fingerprint_continue),
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
@@ -55,14 +57,14 @@ fun FingerprintDialog(
             Button(
                 onClick = { onDecision(HostKeyDecision.TrustAlways(fingerprint)) }
             ) {
-                Text("Trust Always")
+                Text(stringResource(R.string.dialog_fingerprint_trust_always))
             }
         },
         dismissButton = {
             OutlinedButton(
                 onClick = { onDecision(HostKeyDecision.TrustOnce(fingerprint)) }
             ) {
-                Text("Connect Once")
+                Text(stringResource(R.string.dialog_fingerprint_trust_once))
             }
         },
         modifier = modifier

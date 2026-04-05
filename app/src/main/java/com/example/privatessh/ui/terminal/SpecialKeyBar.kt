@@ -1,7 +1,7 @@
 package com.example.privatessh.ui.terminal
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,25 +10,29 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.privatessh.terminal.input.ModifierKey
 import com.example.privatessh.terminal.input.ModifierState
 import com.example.privatessh.terminal.input.SpecialKey
 
-/**
- * Sticky modifier key bar with special keys for terminal input.
- *
- * Layout:
- * - Top row: Modifier keys (Ctrl, Alt, Shift) with sticky behavior
- * - Bottom row: Special keys (Esc, Tab, Arrows, F-keys, etc.)
- */
 @Composable
 fun SpecialKeyBar(
     activeModifiers: Set<ModifierKey>,
@@ -38,27 +42,68 @@ fun SpecialKeyBar(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Modifier keys row (sticky behavior)
-        ModifierKeyRow(
-            activeModifiers = activeModifiers,
-            modifierStates = modifierStates,
-            onModifierClick = onModifierClick
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ModifierKeyRow(
+                    activeModifiers = activeModifiers,
+                    modifierStates = modifierStates,
+                    onModifierClick = onModifierClick
+                )
+                SpecialKeyRow(onSpecialKeyClick = onSpecialKeyClick)
+            }
 
-        // Special keys row
-        SpecialKeyRow(
-            onSpecialKeyClick = onSpecialKeyClick
-        )
+            ArrowPad(onSpecialKeyClick = onSpecialKeyClick)
+        }
     }
 }
 
-/**
- * Row of sticky modifier keys (Ctrl, Alt, Shift).
- */
+@Composable
+private fun ArrowPad(
+    onSpecialKeyClick: (SpecialKey) -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.padding(start = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            ArrowButton(Icons.Default.ArrowUpward) { onSpecialKeyClick(SpecialKey.ARROW_UP) }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                ArrowButton(Icons.Default.ArrowBack) { onSpecialKeyClick(SpecialKey.ARROW_LEFT) }
+                ArrowButton(Icons.Default.ArrowDownward) { onSpecialKeyClick(SpecialKey.ARROW_DOWN) }
+                ArrowButton(Icons.Default.ArrowForward) { onSpecialKeyClick(SpecialKey.ARROW_RIGHT) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArrowButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        modifier = Modifier.size(40.dp),
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+        )
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+    }
+}
+
 @Composable
 private fun ModifierKeyRow(
     activeModifiers: Set<ModifierKey>,
@@ -68,8 +113,8 @@ private fun ModifierKeyRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(2.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ModifierKey.entries.forEach { key ->
             val state = modifierStates[key] ?: ModifierState.Inactive
@@ -80,88 +125,88 @@ private fun ModifierKeyRow(
                 key = key,
                 isActive = isActive,
                 isLatched = isLatched,
-                onClick = { onModifierClick(key) }
+                onClick = { onModifierClick(key) },
+                modifier = Modifier.weight(1f)
             )
         }
     }
 }
 
-/**
- * Button for a single sticky modifier key.
- * Shows different styles for inactive, one-shot, and latched states.
- */
 @Composable
 private fun ModifierKeyButton(
     key: ModifierKey,
     isActive: Boolean,
     isLatched: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val backgroundColor = when {
-        isLatched -> MaterialTheme.colorScheme.primary
-        isActive -> MaterialTheme.colorScheme.secondary
-        else -> MaterialTheme.colorScheme.surface
-    }
-
-    val textColor = when {
-        isLatched || isActive -> MaterialTheme.colorScheme.onPrimary
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-
-    Button(
+    FilterChip(
+        selected = isActive || isLatched,
         onClick = onClick,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = backgroundColor
-        ),
-        modifier = Modifier.size(72.dp, 40.dp)
-    ) {
-        Text(
-            text = when (isLatched) {
-                true -> "🔒${key.name.take(1)}"
-                false -> key.name
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = textColor
-        )
-    }
+        label = {
+            Text(
+                text = when {
+                    isLatched -> "${key.name} LOCK"
+                    isActive -> "${key.name} NEXT"
+                    else -> key.name
+                },
+                style = MaterialTheme.typography.labelSmall
+            )
+        },
+        modifier = modifier
+    )
 }
 
-/**
- * Scrollable row of special keys.
- */
 @Composable
 private fun SpecialKeyRow(
     onSpecialKeyClick: (SpecialKey) -> Unit
 ) {
-    LazyRow(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        contentPadding = PaddingValues(2.dp)
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+        shape = MaterialTheme.shapes.medium
     ) {
-        items(SpecialKey.getDisplayKeys()) { key ->
-            SpecialKeyButton(
-                key = key,
-                onClick = { onSpecialKeyClick(key) }
-            )
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+        ) {
+            items(SpecialKey.getDisplayKeys()) { key ->
+                SpecialKeyButton(
+                    key = key,
+                    onClick = { onSpecialKeyClick(key) }
+                )
+            }
         }
     }
 }
 
-/**
- * Button for a single special key.
- */
 @Composable
 private fun SpecialKeyButton(
     key: SpecialKey,
     onClick: () -> Unit
 ) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = Modifier.size(64.dp, 40.dp)
-    ) {
-        Text(
-            text = key.displayName,
-            style = MaterialTheme.typography.labelSmall
-        )
+    if (key.displayName.length <= 3) {
+        FilledTonalButton(
+            onClick = onClick,
+            modifier = Modifier.size(64.dp, 42.dp),
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+        ) {
+            Text(
+                text = key.displayName,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = Modifier.size(76.dp, 42.dp),
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+        ) {
+            Text(
+                text = key.displayName,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
     }
 }

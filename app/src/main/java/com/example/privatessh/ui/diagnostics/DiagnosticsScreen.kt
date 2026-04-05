@@ -5,8 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,12 +19,16 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -72,6 +78,8 @@ fun DiagnosticsScreen(
     val copiedMessage = stringResource(R.string.diagnostics_copied)
     val copyEmptyMessage = stringResource(R.string.diagnostics_copy_empty)
     val clearedMessage = stringResource(R.string.diagnostics_cleared)
+    
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
     AppScreenScaffold(
         title = stringResource(R.string.diagnostics_title),
@@ -110,6 +118,12 @@ fun DiagnosticsScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
+        val filteredEvents = uiState.events.filter { 
+            it.title.contains(searchQuery, ignoreCase = true) || 
+            it.detail?.contains(searchQuery, ignoreCase = true) == true ||
+            it.category.name.contains(searchQuery, ignoreCase = true)
+        }
+
         if (uiState.hasEvents) {
             LazyColumn(
                 modifier = Modifier
@@ -120,8 +134,27 @@ fun DiagnosticsScreen(
                 item {
                     DiagnosticsHero(uiState = uiState)
                 }
+                
+                item {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Log-Einträge filtern…") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                            focusedContainerColor = MaterialTheme.colorScheme.surface
+                        )
+                    )
+                }
+
                 items(
-                    items = uiState.events,
+                    items = filteredEvents,
                     key = { it.id }
                 ) { event ->
                     DiagnosticEventCard(
@@ -130,7 +163,7 @@ fun DiagnosticsScreen(
                     )
                 }
                 item {
-                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(bottom = 20.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
             }
         } else {
@@ -211,56 +244,74 @@ private fun DiagnosticEventCard(
         DiagnosticLevel.ERROR -> AppTheme.danger
     }
 
-    AppPanel(
+    val containerColor = when (event.level) {
+        DiagnosticLevel.ERROR -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+        DiagnosticLevel.WARN -> AppTheme.warning.copy(alpha = 0.15f)
+        else -> AppTheme.panelColor
+    }
+
+    Surface(
         modifier = modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded },
-        emphasized = event.level == DiagnosticLevel.ERROR,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(18.dp)
+        color = containerColor,
+        shape = MaterialTheme.shapes.medium,
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (event.level == DiagnosticLevel.ERROR) 2.dp else 1.dp,
+            color = if (event.level == DiagnosticLevel.ERROR) MaterialTheme.colorScheme.error.copy(alpha = 0.5f) else AppTheme.panelBorder
+        )
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatusChip(
-                        text = event.level.name,
-                        color = accentColor
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatusChip(
+                            text = event.level.name,
+                            color = accentColor
+                        )
+                        StatusChip(
+                            text = categoryLabel(context, event.category),
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                    Text(
+                        text = event.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (event.level == DiagnosticLevel.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                     )
-                    StatusChip(
-                        text = categoryLabel(context, event.category),
-                        color = MaterialTheme.colorScheme.secondary
+                    Text(
+                        text = formatTimestamp(event.timestampMillis),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = event.title,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = formatTimestamp(event.timestampMillis),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            Icon(
-                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        if (expanded && !event.detail.isNullOrBlank()) {
-            SelectionContainer {
-                Text(
-                    text = event.detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (expanded && !event.detail.isNullOrBlank()) {
+                SelectionContainer {
+                    Text(
+                        text = event.detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

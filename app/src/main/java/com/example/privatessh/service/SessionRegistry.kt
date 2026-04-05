@@ -74,7 +74,7 @@ class SessionRegistry @Inject constructor() {
             lifecycleState = SessionLifecycleState.GRACE,
             sessionCount = if (it.activeSession != null) 1 else 0,
             graceMinutesRemaining = minutesRemaining,
-            statusMessage = "Session kept alive in background"
+            statusMessage = null
         ) }
     }
 

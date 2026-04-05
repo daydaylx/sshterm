@@ -30,6 +30,9 @@ import com.example.privatessh.terminal.TerminalColor
 import com.example.privatessh.terminal.TerminalRenderRow
 import com.example.privatessh.terminal.TerminalRendererState
 import com.example.privatessh.terminal.TerminalSelection
+import com.example.privatessh.ui.theme.TerminalBackground
+import com.example.privatessh.ui.theme.TerminalForeground
+import com.example.privatessh.ui.theme.TerminalSelection as TerminalSelectionColor
 import kotlin.math.floor
 
 @Composable
@@ -49,7 +52,7 @@ fun TerminalViewport(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(TerminalBackground)
     ) {
         val columns = maxOf(20, (maxWidth.value / (fontSizeSp * 0.65f)).toInt())
         val rows = maxOf(6, (maxHeight.value / (fontSizeSp * 1.45f)).toInt())
@@ -70,6 +73,7 @@ fun TerminalViewport(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 12.dp)
                 .pointerInput(selection) {
                     detectTapGestures(
                         onTap = {
@@ -116,7 +120,7 @@ fun TerminalViewport(
                             rowIndex == rendererState.cursorRow,
                         cursorCol = rendererState.cursorCol
                     ),
-                    color = Color(0xFFE6E6E6),
+                    color = TerminalForeground,
                     fontFamily = FontFamily.Monospace,
                     fontSize = fontSizeSp.sp,
                     softWrap = false,
@@ -135,8 +139,8 @@ private fun buildRowString(
     cursorCol: Int
 ) = buildAnnotatedString {
     row.cells.forEachIndexed { index, cell ->
-        val defaultForeground = Color(0xFFE6E6E6)
-        val defaultBackground = Color.Black
+        val defaultForeground = TerminalForeground
+        val defaultBackground = TerminalBackground
         var foreground = cell.attribute.foregroundColor.toComposeColor(defaultForeground)
         var background = cell.attribute.backgroundColor.toComposeColor(defaultBackground)
 
@@ -147,13 +151,12 @@ private fun buildRowString(
         }
 
         if (selection?.contains(rowIndex, index) == true) {
-            val selectedBackground = Color(0xFF28527A)
             foreground = foreground.takeUnless { it == Color.Unspecified } ?: defaultForeground
-            background = selectedBackground
+            background = TerminalSelectionColor
         } else if (highlightCursor && index == cursorCol) {
             val originalForeground = foreground
-            foreground = background.takeUnless { it == Color.Black } ?: Color.Black
-            background = originalForeground.takeUnless { it == Color.Black } ?: Color(0xFFE6E6E6)
+            foreground = background.takeUnless { it == TerminalBackground } ?: TerminalBackground
+            background = originalForeground.takeUnless { it == TerminalBackground } ?: TerminalForeground
         }
 
         withStyle(

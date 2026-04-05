@@ -9,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.example.privatessh.ui.hostedit.HostEditScreen
 import com.example.privatessh.ui.hostlist.HostListScreen
+import com.example.privatessh.ui.diagnostics.DiagnosticsScreen
 import com.example.privatessh.ui.settings.SettingsScreen
 import com.example.privatessh.ui.terminal.TerminalScreen
 
@@ -22,6 +23,7 @@ fun AppNavHost(
     startDestination: String = AppRoutes.HOST_LIST
 ) {
     NavHost(
+        modifier = modifier,
         navController = navController,
         startDestination = startDestination
     ) {
@@ -76,12 +78,24 @@ fun AppNavHost(
             val hostId = backStackEntry.arguments?.getString(AppRoutes.HOST_ID_ARG) ?: return@composable
             TerminalScreen(
                 hostId = hostId,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDiagnostics = {
+                    navController.navigate(AppRoutes.DIAGNOSTICS)
+                }
             )
         }
 
         composable(AppRoutes.SETTINGS) {
             SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDiagnostics = {
+                    navController.navigate(AppRoutes.DIAGNOSTICS)
+                }
+            )
+        }
+
+        composable(AppRoutes.DIAGNOSTICS) {
+            DiagnosticsScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

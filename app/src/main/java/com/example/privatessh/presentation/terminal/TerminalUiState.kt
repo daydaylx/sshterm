@@ -26,6 +26,8 @@ data class TerminalUiState(
     val keepScreenOn: Boolean = true,
     val biometricAuthEnabled: Boolean = false,
     val error: String? = null,
+    val diagnosticsCount: Int = 0,
+    val latestDiagnosticError: String? = null,
     val isLoading: Boolean = false,
     val isAwaitingPassword: Boolean = false,
     val hostKeyPrompt: HostKeyPrompt? = null,
@@ -57,6 +59,9 @@ data class TerminalUiState(
      */
     val hasError: Boolean
         get() = error != null
+
+    val hasDiagnostics: Boolean
+        get() = diagnosticsCount > 0
 
     /**
      * Returns true if Ctrl modifier is active.

@@ -15,7 +15,7 @@ class LoadPrivateKeyUseCase @Inject constructor(
 ) {
 
     suspend operator fun invoke(hostProfile: HostProfile): String? {
-        val keyAlias = "key_${hostProfile.id}"
+        val keyAlias = "host_${hostProfile.id}"
         return secureKeyRepository.getKey(keyAlias)
     }
 
@@ -26,7 +26,7 @@ class LoadPrivateKeyUseCase @Inject constructor(
         hostProfile: HostProfile,
         privateKeyPem: String
     ): Boolean {
-        val keyAlias = "key_${hostProfile.id}"
+        val keyAlias = "host_${hostProfile.id}"
         return try {
             secureKeyRepository.storeKey(keyAlias, privateKeyPem)
             true
@@ -40,7 +40,7 @@ class LoadPrivateKeyUseCase @Inject constructor(
      * Checks if a private key exists for the given host profile.
      */
     suspend fun hasPrivateKey(hostProfile: HostProfile): Boolean {
-        val keyAlias = "key_${hostProfile.id}"
+        val keyAlias = "host_${hostProfile.id}"
         return secureKeyRepository.getKey(keyAlias) != null
     }
 
@@ -48,7 +48,7 @@ class LoadPrivateKeyUseCase @Inject constructor(
      * Removes the private key for the given host profile.
      */
     suspend fun removePrivateKey(hostProfile: HostProfile): Boolean {
-        val keyAlias = "key_${hostProfile.id}"
+        val keyAlias = "host_${hostProfile.id}"
         return try {
             secureKeyRepository.deleteKey(keyAlias)
             true
