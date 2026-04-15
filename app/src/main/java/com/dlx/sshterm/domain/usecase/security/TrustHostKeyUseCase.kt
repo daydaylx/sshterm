@@ -1,0 +1,61 @@
+package com.dlx.sshterm.domain.usecase.security
+
+import com.dlx.sshterm.domain.model.KnownHostEntry
+import com.dlx.sshterm.domain.repository.KnownHostRepository
+import dagger.hilt.android.scopes.ViewModelScoped
+import timber.log.Timber
+import javax.inject.Inject
+
+/**
+ * Adds a host key to the known hosts repository.
+ */
+@ViewModelScoped
+class TrustHostKeyUseCase @Inject constructor(
+    private val knownHostRepository: KnownHostRepository
+) {
+
+    suspend operator fun invoke(
+        host: String,
+        algorithm: String,
+        fingerprint: String
+    ): Boolean {
+        return try {
+            val entry = KnownHostEntry(
+                host = host,
+                algorithm = algorithm,
+                fingerprint = fingerprint
+            )
+            knownHostRepository.addKnownHost(entry)
+            true
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to trust host key for %s", host)
+            false
+        }
+    }
+
+    /**
+     * Trusts a host key entry directly.
+     */
+    suspend operator fun invoke(entry: KnownHostEntry): Boolean {
+        return try {
+            knownHostRepository.addKnownHost(entry)
+            true
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to trust host key entry for %s", entry.host)
+            false
+        }
+    }
+
+    /**
+     * Removes a host key from the known hosts repository.
+     */
+    suspend fun untrustHost(host: String): Boolean {
+        return try {
+            knownHostRepository.removeKnownHost(host)
+            true
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to untrust host key for %s", host)
+            false
+        }
+    }
+}

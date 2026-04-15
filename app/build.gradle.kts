@@ -8,11 +8,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.privatessh"
+    namespace = "com.dlx.sshterm"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.privatessh"
+        applicationId = "com.dlx.sshterm"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Private SSH</string>
+    <string name="app_name">SSHTerm</string>
 
     <!-- Navigation -->
     <string name="nav_host_list">Server</string>
@@ -63,8 +63,9 @@
     <string name="host_edit_private_key_replace">Neuen Schlüssel eingeben (PEM)</string>
     <string name="host_edit_private_key_label">Privater Schlüssel (PEM)</string>
     <string name="host_edit_private_key_support">PEM-Inhalt direkt einfügen. Der Schlüssel wird sicher gespeichert und nicht im Klartext behalten.</string>
-    <string name="host_edit_password">Password</string>
-    <string name="host_edit_private_key">Private Key</string>
+    <string name="host_edit_password">Passwort</string>
+    <string name="host_edit_private_key">Privater Schlüssel</string>
+    <string name="host_edit_load_key_file">Schlüsseldatei laden</string>
     <string name="host_edit_working">Profil wird aktualisiert…</string>
     <string name="host_edit_save">Server speichern</string>
     <string name="host_edit_cancel">Abbrechen</string>
@@ -96,6 +97,9 @@
     <string name="terminal_disconnect">Trennen</string>
     <string name="terminal_reconnect">Erneut verbinden</string>
     <string name="terminal_diagnostics">Diagnose</string>
+    <string name="terminal_fullscreen_toggle">Vollbild umschalten</string>
+    <string name="terminal_accessory_modifiers">Modifier</string>
+    <string name="terminal_accessory_keys">Sondertasten</string>
     <string name="terminal_connecting_to">Verbindung zu %1$s wird hergestellt…</string>
     <string name="terminal_connected_to">Verbunden mit %1$s</string>
     <string name="terminal_connected_with_status">Verbunden mit %1$s · %2$s</string>

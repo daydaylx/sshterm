@@ -3,21 +3,37 @@ package com.dlx.sshterm.ui.terminal
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -31,6 +47,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -40,8 +57,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dlx.sshterm.R
 import com.dlx.sshterm.presentation.terminal.TerminalUiEffect
@@ -50,19 +69,12 @@ import com.dlx.sshterm.service.SessionLifecycleState
 import com.dlx.sshterm.service.SessionNotificationFactory
 import com.dlx.sshterm.service.TerminalSessionService
 import com.dlx.sshterm.service.security.BiometricGate
+import com.dlx.sshterm.ssh.SshSessionState
 import com.dlx.sshterm.ui.components.AppBackdrop
-import com.dlx.sshterm.ui.components.AppPanel
 import com.dlx.sshterm.ui.dialogs.DisconnectDialog
 import com.dlx.sshterm.ui.dialogs.FingerprintDialog
 import com.dlx.sshterm.ui.theme.AppTheme
-
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.material3.OutlinedTextField
 
 @Composable
 fun TerminalScreen(
@@ -77,17 +89,28 @@ fun TerminalScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val view = LocalView.current
-    val passwordTitle = stringResource(R.string.terminal_password_required)
-    val passwordLabel = stringResource(R.string.terminal_password_label)
-    val connectLabel = stringResource(R.string.terminal_connect)
-    val cancelLabel = stringResource(R.string.terminal_cancel)
-    val terminalInputLabel = stringResource(R.string.terminal_input_label)
+    val imeBridgeController = rememberTerminalImeBridgeController()
+    
+    var uiVisible by rememberSaveable { mutableStateOf(true) }
     var showDisconnectDialog by remember { mutableStateOf(false) }
     var password by rememberSaveable { mutableStateOf("") }
-    var inputBuffer by remember { mutableStateOf(TextFieldValue()) }
-    
-    // Immersive mode state
-    var isUiVisible by rememberSaveable { mutableStateOf(true) }
+
+    // Manage Immersive Mode
+    DisposableEffect(uiVisible) {
+        val window = (context as? AppCompatActivity)?.window ?: return@DisposableEffect onDispose {}
+        val controller = WindowInsetsControllerCompat(window, view)
+        
+        if (!uiVisible) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+        
+        onDispose {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
 
     LaunchedEffect(hostId) {
         viewModel.connect(hostId)
@@ -112,7 +135,6 @@ fun TerminalScreen(
                         viewModel.onBiometricAuthResult(false)
                     }
                 }
-
                 else -> Unit
             }
         }
@@ -120,15 +142,19 @@ fun TerminalScreen(
 
     LaunchedEffect(uiState.sessionState, uiState.hostName) {
         when (uiState.sessionState) {
-            com.dlx.sshterm.ssh.SshSessionState.CONNECTED -> {
+            SshSessionState.CONNECTED -> {
                 context.startTerminalService(sessionId = hostId, hostName = uiState.hostName)
             }
-
-            com.dlx.sshterm.ssh.SshSessionState.DISCONNECTED -> {
+            SshSessionState.DISCONNECTED -> {
                 context.stopService(Intent(context, TerminalSessionService::class.java))
             }
-
             else -> Unit
+        }
+    }
+
+    LaunchedEffect(uiState.sessionState, uiState.isAwaitingPassword) {
+        if (uiState.sessionState == SshSessionState.CONNECTED && !uiState.isAwaitingPassword) {
+            imeBridgeController.requestFocus()
         }
     }
 
@@ -137,6 +163,14 @@ fun TerminalScreen(
             (uiState.isConnected || uiState.isReconnecting || uiState.lifecycleState == SessionLifecycleState.GRACE)
         onDispose {
             view.keepScreenOn = false
+        }
+    }
+
+    BackHandler {
+        if (!uiVisible) {
+            uiVisible = true
+        } else {
+            viewModel.navigateBack()
         }
     }
 
@@ -162,12 +196,12 @@ fun TerminalScreen(
     if (uiState.isAwaitingPassword) {
         AlertDialog(
             onDismissRequest = viewModel::cancelPasswordPrompt,
-            title = { Text(passwordTitle) },
+            title = { Text(stringResource(R.string.terminal_password_required)) },
             text = {
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text(passwordLabel) },
+                    label = { Text(stringResource(R.string.terminal_password_label)) },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Password,
                         imeAction = ImeAction.Done
@@ -185,7 +219,7 @@ fun TerminalScreen(
                     viewModel.submitPassword(password)
                     password = ""
                 }) {
-                    Text(connectLabel)
+                    Text(stringResource(R.string.terminal_connect))
                 }
             },
             dismissButton = {
@@ -193,22 +227,27 @@ fun TerminalScreen(
                     password = ""
                     viewModel.cancelPasswordPrompt()
                 }) {
-                    Text(cancelLabel)
+                    Text(stringResource(R.string.terminal_cancel))
                 }
             }
         )
     }
 
     AppBackdrop(modifier = modifier.fillMaxSize()) {
-        Scaffold(
-            containerColor = Color.Transparent,
-            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
-            modifier = Modifier.fillMaxSize(),
-            topBar = {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { uiVisible = !uiVisible }
+                )
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
                 AnimatedVisibility(
-                    visible = isUiVisible,
-                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                    visible = uiVisible,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
                 ) {
                     TerminalTopBar(
                         hostName = uiState.hostName,
@@ -219,102 +258,108 @@ fun TerminalScreen(
                         latestDiagnosticError = uiState.latestDiagnosticError,
                         onDiagnostics = onNavigateToDiagnostics,
                         onDisconnect = { showDisconnectDialog = true },
-                        onReconnect = { viewModel.connect(hostId) }
+                        onReconnect = { viewModel.connect(hostId) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 8.dp, vertical = 8.dp)
                     )
                 }
-            },
-            bottomBar = {
-                AnimatedVisibility(
-                    visible = isUiVisible,
-                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = if (uiVisible) 8.dp else 0.dp),
+                    color = Color.Black,
+                    shape = if (uiVisible) RoundedCornerShape(24.dp) else RoundedCornerShape(0.dp),
+                    border = if (uiVisible) BorderStroke(1.dp, AppTheme.panelBorder.copy(alpha = 0.5f)) else null
                 ) {
-                    AppPanel(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        emphasized = true,
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(6.dp)
-                    ) {
-                        TerminalSelectionToolbar(
-                            hasSelection = uiState.hasSelection,
-                            selectedText = uiState.selectedText,
-                            onCopy = {
-                                if (uiState.selectedText.isNotBlank()) {
-                                    clipboardManager.setText(AnnotatedString(uiState.selectedText))
-                                    viewModel.onSelectionCopied()
-                                }
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        TerminalViewport(
+                            rendererState = uiState.rendererState,
+                            selection = uiState.selection,
+                            fontSizeSp = uiState.terminalFontSizeSp,
+                            onResize = viewModel::onTerminalResize,
+                            onTapTerminal = {
+                                if (!uiVisible) uiVisible = true
+                                imeBridgeController.requestFocus()
                             },
-                            onPaste = {
-                                val clipboardText = clipboardManager.getText()?.text.orEmpty()
-                                if (clipboardText.isNotBlank()) {
-                                    viewModel.onTextInput(clipboardText)
-                                    viewModel.clearSelection()
-                                }
-                            },
-                            onCancel = viewModel::clearSelection
+                            onSelectionStart = viewModel::startSelection,
+                            onSelectionDrag = viewModel::updateSelection,
+                            onSelectionClear = viewModel::clearSelection,
+                            modifier = Modifier.fillMaxSize()
                         )
-                        OutlinedTextField(
-                            value = inputBuffer,
-                            onValueChange = { newValue ->
-                                if (newValue.text.isNotEmpty()) {
-                                    viewModel.onTextInput(newValue.text)
-                                }
-                                inputBuffer = TextFieldValue()
-                            },
-                            placeholder = { Text(terminalInputLabel) },
-                            modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-                            keyboardActions = KeyboardActions.Default
-                        )
-                        SpecialKeyBar(
-                            activeModifiers = uiState.activeModifiers,
-                            modifierStates = uiState.modifierStates,
-                            onModifierClick = viewModel::onModifierKeyClick,
-                            onSpecialKeyClick = viewModel::onSpecialKeyClick
-                        )
-                        SessionStatusBar(
-                            sessionState = uiState.sessionState,
-                            lifecycleState = uiState.lifecycleState,
-                            hostName = uiState.hostName,
-                            graceMinutesRemaining = uiState.graceMinutesRemaining,
-                            statusMessage = uiState.statusMessage
+                        TerminalImeBridge(
+                            controller = imeBridgeController,
+                            onTextInput = viewModel::onTextInput,
+                            onKeyEvent = viewModel::onKeyEvent,
+                            onSpecialKey = viewModel::onSpecialKeyClick,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .size(1.dp)
                         )
                     }
                 }
-            },
-            snackbarHost = { SnackbarHost(snackbarHostState) }
-        ) { paddingValues ->
-            Surface(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 12.dp),
-                color = Color.Transparent,
-                shape = RoundedCornerShape(28.dp),
-                border = BorderStroke(1.dp, AppTheme.panelBorder)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(AppTheme.terminalBackdropBrush)
-                        .padding(8.dp)
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onTap = { isUiVisible = !isUiVisible }
-                            )
-                        }
+
+                AnimatedVisibility(
+                    visible = uiVisible,
+                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
                 ) {
-                    TerminalViewport(
-                        rendererState = uiState.rendererState,
-                        selection = uiState.selection,
-                        fontSizeSp = uiState.terminalFontSizeSp,
-                        onResize = viewModel::onTerminalResize,
-                        onSelectionStart = viewModel::startSelection,
-                        onSelectionDrag = viewModel::updateSelection,
-                        onSelectionClear = viewModel::clearSelection,
-                        modifier = Modifier.fillMaxSize()
+                    TerminalAccessoryBar(
+                        hasSelection = uiState.hasSelection,
+                        activeModifiers = uiState.activeModifiers,
+                        modifierStates = uiState.modifierStates,
+                        selectedTextLength = uiState.selectedText.length,
+                        onCopy = {
+                            if (uiState.selectedText.isNotEmpty()) {
+                                clipboardManager.setText(AnnotatedString(uiState.selectedText))
+                                viewModel.onSelectionCopied()
+                            }
+                            imeBridgeController.requestFocus()
+                        },
+                        onPaste = {
+                            val clipboardText = clipboardManager.getText()?.text.orEmpty()
+                            if (clipboardText.isNotEmpty()) {
+                                viewModel.onTextInput(clipboardText)
+                                viewModel.clearSelection()
+                            }
+                            imeBridgeController.requestFocus()
+                        },
+                        onCancel = {
+                            viewModel.clearSelection()
+                            imeBridgeController.requestFocus()
+                        },
+                        onModifierClick = {
+                            viewModel.onModifierKeyClick(it)
+                            imeBridgeController.requestFocus()
+                        },
+                        onSpecialKeyClick = {
+                            viewModel.onSpecialKeyClick(it)
+                            imeBridgeController.requestFocus()
+                        },
+                        onTextInput = {
+                            viewModel.onTextInput(it)
+                            imeBridgeController.requestFocus()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .imePadding()
+                            .padding(horizontal = 8.dp, vertical = 8.dp)
                     )
                 }
             }
+
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
+            )
         }
     }
 }
